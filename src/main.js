@@ -641,7 +641,89 @@ async function loadSummaryTable(year) {
   el.innerHTML = hasData ? html : '<div class="empty">尚無資料</div>';
 }
  
-// ========== 產生報表（新版）==========
+function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fins, mgmt, otherInc, exp, totalInc, net, bal) {
+  const lastDay = new Date(year + 1911, month, 0).getDate();
+  const perCol = Math.ceil(units.length / 3);
+  const col1 = units.slice(0, perCol);
+  const col2 = units.slice(perCol, perCol * 2);
+  const col3 = units.slice(perCol * 2);
+  const maxRows = Math.max(col1.length, col2.length, col3.length);
+  let unitRows = '';
+  for (let i = 0; i < maxRows; i++) {
+    const renderCell = (u) => {
+      if (!u) return '<td></td><td></td><td></td><td></td><td></td>';
+      const p = displayMap[u.unit];
+      const isLate = p && p.late;
+      const s = isLate ? ' style="background:#d9d9d9"' : '';
+      if (!p) return '<td' + s + '>' + u.unit + '</td><td' + s + '></td><td' + s + '></td><td' + s + '></td><td' + s + '></td>';
+      const feeStr = p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee);
+      return '<td' + s + '>' + u.unit + '</td><td' + s + '>' + (p.payDate||'') + '</td><td' + s + '>' + (p.receipt||'') + '</td><td' + s + '>' + (p.period||'') + '</td><td' + s + ' style="text-align:right' + (isLate ? ';background:#d9d9d9' : '') + '">' + feeStr + '</td>';
+    };
+    unitRows += '<tr>' + renderCell(col1[i]) + renderCell(col2[i]) + renderCell(col3[i]) + '</tr>\n';
+  }
+  const expItems = fins.filter(f => f.type === '支出');
+  const expMid = Math.ceil(expItems.length / 2);
+  const exp1 = expItems.slice(0, expMid);
+  const exp2 = expItems.slice(expMid);
+  const expMaxRows = Math.max(exp1.length, exp2.length, 1);
+  let expRows = '';
+  for (let i = 0; i < expMaxRows; i++) {
+    expRows += '<tr><td>' + (exp1[i] ? exp1[i].date : '') + '</td><td colspan="3">' + (exp1[i] ? exp1[i].item + (exp1[i].receipt ? '（' + exp1[i].receipt + '）' : '') : '') + '</td><td class="num">' + (exp1[i] ? exp1[i].amount.toLocaleString() : '') + '</td><td>' + (exp2[i] ? exp2[i].date : '') + '</td><td colspan="3">' + (exp2[i] ? exp2[i].item + (exp2[i].receipt ? '（' + exp2[i].receipt + '）' : '') : '') + '</td><td class="num">' + (exp2[i] ? exp2[i].amount.toLocaleString() : '') + '</td></tr>';
+  }
+  const otherItems = fins.filter(f => f.type === '收入');
+  const otherDetail = otherItems.map((f, i) => (i+1) + '. ' + f.item + ' ' + f.amount.toLocaleString() + '（' + (f.receipt||'') + '）').join('　');
+  const exp1Total = exp1.reduce((s,f) => s + f.amount, 0).toLocaleString();
+  const exp2Total = exp2.reduce((s,f) => s + f.amount, 0).toLocaleString();
+
+  const lines = [
+    '<!DOCTYPE html>',
+    '<html lang="zh-TW">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<title>' + year + '年' + month + '月 泰慶天廈收支明細</title>',
+    '<style>',
+    '@page{size:A4;margin:12mm 10mm}',
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:"Microsoft JhengHei",Arial,sans-serif;font-size:9pt;color:#000}',
+    'h2{text-align:center;font-size:11pt;font-weight:bold;margin-bottom:6px}',
+    '.st{font-weight:bold;font-size:9.5pt;margin:6px 0 3px}',
+    'table{width:100%;border-collapse:collapse}',
+    'td,th{border:1px solid #888;padding:2px 4px;font-size:8.5pt}',
+    'th{background:#dce6f1;font-weight:bold;text-align:center}',
+    '.num{text-align:right}',
+    '.sr td{font-weight:bold;background:#f2f2f2}',
+    '.sign{margin-top:14px;display:flex;gap:60px}',
+    '.sign span{flex:1;border-bottom:1px solid #000;padding-bottom:2px;font-size:10pt}',
+    '.note{font-size:8pt;color:#555;margin-top:6px}',
+    '.ir{display:flex;justify-content:space-between;align-items:center;margin:4px 0}',
+    '</style>',
+    '</head>',
+    '<body>',
+    '<h2>' + year + '年' + month + '月1日至' + year + '年' + month + '月' + lastDay + '日　泰慶天廈收支明細</h2>',
+    '<div class="ir"><span class="st">(1) 收　入</span><span><strong>A、上個月餘額：' + prev.toLocaleString() + '</strong></span></div>',
+    '<table>',
+    '<tr><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th></tr>',
+    unitRows,
+    '<tr class="sr"><td colspan="10"></td><td colspan="3"><strong>B、管理費收入：</strong></td><td colspan="2" class="num"><strong>' + mgmt.toLocaleString() + '</strong></td></tr>',
+    '<tr><td colspan="5" rowspan="2" style="font-size:8pt;vertical-align:top"><div><strong>收入原因：</strong></div><div>' + (otherDetail||'無') + '</div></td><td colspan="3"><strong>其他收入：</strong></td><td colspan="2" class="num">' + otherInc.toLocaleString() + '</td><td colspan="5"></td></tr>',
+    '<tr><td colspan="3"><strong>D、收入合計(B+C)：</strong></td><td colspan="2" class="num"><strong>' + totalInc.toLocaleString() + '</strong></td><td colspan="5"></td></tr>',
+    '</table>',
+    '<div class="st" style="margin-top:8px">(2) 支　出</div>',
+    '<table>',
+    '<tr><th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th><th>日期</th><th colspan="3">支出明細（二）</th><th>金額</th></tr>',
+    expRows,
+    '<tr class="sr"><td><strong>合計：</strong></td><td colspan="3"></td><td class="num"><strong>' + exp1Total + '</strong></td><td><strong>合計：</strong></td><td colspan="3"></td><td class="num"><strong>' + exp2Total + '</strong></td></tr>',
+    '<tr class="sr"><td colspan="3"><strong>E、支出合計：</strong></td><td colspan="2" class="num"><strong>' + exp.toLocaleString() + '</strong></td><td colspan="3"><strong>本期結餘(A+F)：</strong></td><td colspan="2" class="num" style="font-size:11pt;color:#1a56a0"><strong>' + bal.toLocaleString() + '</strong></td></tr>',
+    '<tr><td colspan="3"><strong>F、差異(D-E)：</strong></td><td colspan="2" class="num">' + net.toLocaleString() + '</td><td colspan="5"></td></tr>',
+    '</table>',
+    '<p class="note">※ 灰色底為遲交管理費住戶，無12月份優惠。</p>',
+    '<div class="sign"><span>主委：</span><span>財務：</span><span>製表人：</span></div>',
+    '</body>',
+    '</html>'
+  ];
+  return lines.join('\n');
+}
+
 async function generateReport() {
   const year = parseInt(document.getElementById('rpt-year').value);
   const month = parseInt(document.getElementById('rpt-month').value);
@@ -650,13 +732,10 @@ async function generateReport() {
   const btn = document.getElementById('rpt-submit');
   btn.textContent = '產生中...'; btn.disabled = true;
   try {
-    // 收入：用 payMonth 篩選本月實際收款
     const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
     const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', year), where('month', '==', month)));
     const allPays = paySnap.docs.map(d => d.data());
     const fins = finSnap.docs.map(d => d.data());
- 
-    // 本月實際收款（payMonth === month）
     const thisMonthPays = allPays.filter(p => p.payMonth === month);
     const mgmt = thisMonthPays.reduce((s, p) => s + (p.fee || 0), 0);
     const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
@@ -664,369 +743,29 @@ async function generateReport() {
     const totalInc = mgmt + otherInc;
     const net = totalInc - exp;
     const bal = prev + net;
- 
-    // 報表顯示：找每個住戶在本月的顯示資料
-    // 優先顯示本月有繳費的，其次顯示預繳涵蓋本月的
     const displayMap = {};
     allPays.forEach(p => {
       const start = p.startMonth || p.payMonth || p.month;
       const end = p.endMonth || p.payMonth || p.month;
       if (start <= month && end >= month) {
-        // 這筆涵蓋本月
         const isPayMonth = p.payMonth === month;
         if (!displayMap[p.unit] || isPayMonth) {
-          const periodStr = start === end ? `${year}年${start}月` : `${year}年${start}-${end}月`;
+          const periodStr = start === end ? year + '年' + start + '月' : year + '年' + start + '-' + end + '月';
           displayMap[p.unit] = {
             payDate: p.payDate,
             receipt: p.receipt,
-            period: isPayMonth ? periodStr : `已繳至${end}月`,
+            period: isPayMonth ? periodStr : '已繳至' + end + '月',
             fee: isPayMonth ? p.fee : '-',
             late: p.late,
           };
         }
       }
     });
- 
-    // 分三欄
-    const perCol = Math.ceil(units.length / 3);
-    const col1 = units.slice(0, perCol);
-    const col2 = units.slice(perCol, perCol * 2);
-    const col3 = units.slice(perCol * 2);
-    const maxRows = Math.max(col1.length, col2.length, col3.length);
- 
-    let unitRows = '';
-    for (let i = 0; i < maxRows; i++) {
-      const renderCell = (u) => {
-        if (!u) return '<td></td><td></td><td></td><td></td><td></td>';
-        const p = displayMap[u.unit];
-        const isLate = p && p.late;
-        const s = isLate ? ' style="background:#d9d9d9"' : '';
-        if (!p) return `<td${s}>${u.unit}</td><td${s}></td><td${s}></td><td${s}></td><td${s}></td>`;
-        const feeStr = p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee);
-        return `<td${s}>${u.unit}</td><td${s}>${p.payDate||''}</td><td${s}>${p.receipt||''}</td><td${s}>${p.period||''}</td><td${s} style="text-align:right${isLate?';background:#d9d9d9':''}">${feeStr}</td>`;
-      };
-      unitRows += `<tr>${renderCell(col1[i])}${renderCell(col2[i])}${renderCell(col3[i])}</tr>\n`;
-    }
- 
-    // 支出
-    const expItems = fins.filter(f => f.type === '支出');
-    const expMid = Math.ceil(expItems.length / 2);
-    const exp1 = expItems.slice(0, expMid);
-    const exp2 = expItems.slice(expMid);
-    const expMaxRows = Math.max(exp1.length, exp2.length, 1);
-    let expRows = '';
-    for (let i = 0; i < expMaxRows; i++) {
-      expRows += `<tr>
-        <td>${exp1[i] ? exp1[i].date : ''}</td>
-        <td colspan="3">${exp1[i] ? exp1[i].item + (exp1[i].receipt ? `（${exp1[i].receipt}）` : '') : ''}</td>
-        <td class="num">${exp1[i] ? exp1[i].amount.toLocaleString() : ''}</td>
-        <td>${exp2[i] ? exp2[i].date : ''}</td>
-        <td colspan="3">${exp2[i] ? exp2[i].item + (exp2[i].receipt ? `（${exp2[i].receipt}）` : '') : ''}</td>
-        <td class="num">${exp2[i] ? exp2[i].amount.toLocaleString() : ''}</td>
-      </tr>`;
-    }
- 
-    const otherItems = fins.filter(f => f.type === '收入');
-    const otherDetail = otherItems.map((f,i) => `${i+1}. ${f.item} ${f.amount.toLocaleString()}（${f.receipt||''}）`).join('　');
-    const lastDay = new Date(year + 1911, month, 0).getDate();
- 
-    const html = `<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-<meta charset="UTF-8">
-<title>${year}年${month}月 泰慶天廈收支明細</title>
-<style>
-  @page { size: A4; margin: 12mm 10mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Microsoft JhengHei', '微軟正黑體', Arial, sans-serif; font-size: 9pt; color: #000; }
-  h2 { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 6px; }
-  .section-title { font-weight: bold; font-size: 9.5pt; margin: 6px 0 3px; }
-  table { width: 100%; border-collapse: collapse; }
-  td, th { border: 1px solid #888; padding: 2px 4px; font-size: 8.5pt; }
-  th { background: #dce6f1; font-weight: bold; text-align: center; }
-  .num { text-align: right; }
-  .summary-row td { font-weight: bold; background: #f2f2f2; }
-  .sign-row { margin-top: 14px; display: flex; gap: 60px; }
-  .sign-row span { flex: 1; border-bottom: 1px solid #000; padding-bottom: 2px; font-size: 10pt; }
-  .note { font-size: 8pt; color: #555; margin-top: 6px; }
-  .info-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
-</style>
-</head>
-<body>
-<h2>${year}年${month}月1日至${year}年${month}月${lastDay}日　泰慶天廈收支明細</h2>
-<div class="info-row">
-  <span class="section-title">(1) 收　入</span>
-  <span><strong>A、上個月餘額：${prev.toLocaleString()}</strong></span>
-</div>
-<table>
-  <tr>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-  </tr>
-  ${unitRows}
-  <tr class="summary-row">
-    <td colspan="10"></td>
-    <td colspan="3"><strong>B、管理費收入：</strong></td>
-    <td colspan="2" class="num"><strong>${mgmt.toLocaleString()}</strong></td>
-  </tr>
-  <tr>
-    <td colspan="5" rowspan="2" style="font-size:8pt;vertical-align:top">
-      <div><strong>收入原因：</strong></div>
-      <div>${otherDetail || '無'}</div>
-    </td>
-    <td colspan="3"><strong>其他收入：</strong></td>
-    <td colspan="2" class="num">${otherInc.toLocaleString()}</td>
-    <td colspan="5"></td>
-  </tr>
-  <tr>
-    <td colspan="3"><strong>D、收入合計(B+C)：</strong></td>
-    <td colspan="2" class="num"><strong>${totalInc.toLocaleString()}</strong></td>
-    <td colspan="5"></td>
-  </tr>
-</table>
-<div class="section-title" style="margin-top:8px">(2) 支　出</div>
-<table>
-  <tr>
-    <th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th>
-  </tr>
-  ${expRows}
-  <tr class="summary-row">
-    <td><strong>合計：</strong></td><td colspan="3"></td>
-    <td class="num"><strong>${exp1.reduce((s,f)=>s+f.amount,0).toLocaleString()}</strong></td>
-    <td><strong>合計：</strong></td><td colspan="3"></td>
-    <td class="num"><strong>${exp2.reduce((s,f)=>s+f.amount,0).toLocaleString()}</strong></td>
-  </tr>
-  <tr class="summary-row">
-    <td colspan="3"><strong>E、支出合計：</strong></td>
-    <td colspan="2" class="num"><strong>${exp.toLocaleString()}</strong></td>
-    <td colspan="3"><strong>本期結餘(A+F)：</strong></td>
-    <td colspan="2" class="num" style="font-size:11pt;color:#1a56a0"><strong>${bal.toLocaleString()}</strong></td>
-  </tr>
-  <tr>
-    <td colspan="3"><strong>F、差異(D-E)：</strong></td>
-    <td colspan="2" class="num">${net.toLocaleString()}</td>
-    <td colspan="5"></td>
-  </tr>
-</table>
-<p class="note">※ 灰色底為遲交管理費住戶，無12月份優惠。</p>
-<div class="sign-row">
-  <span>主委：</span><span>財務：</span><span>製表人：</span>
-</div>
-<script>window.onload = () => window.print();<\/script>
-</body>
-</html>`;
- 
+    const html = buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fins, mgmt, otherInc, exp, totalInc, net, bal);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
-    showMsg('rpt-msg', `報表已開啟！本期結餘：${bal.toLocaleString()} 元`, true);
-    loadSummaryTable(year);
-  } catch (e) {
-    showMsg('rpt-msg', '錯誤：' + e.message, false);
-  }
-  btn.textContent = '產生報表 (PDF列印)'; btn.disabled = false;
-}
- 
-function getLastDay(rocYear, month) {
-  return new Date(rocYear + 1911, month, 0).getDate();
-}
- 
-window.autoFillPrevBalance = async function() {
-  const year = parseInt(document.getElementById('rpt-year').value);
-  const month = parseInt(document.getElementById('rpt-month').value);
-  if (!year || !month) return;
-  const prevBalance = await calcBalanceUpTo(year, month - 1);
-  if (prevBalance !== null) {
-    document.getElementById('rpt-prev').value = prevBalance;
-  }
-}
- 
-async function calcBalanceUpTo(year, month) {
-  try {
-    const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
-    if (!initSnap.exists()) return null;
-    let balance = initSnap.data().value;
-    const startYear = initSnap.data().year;
-    const startMonth = initSnap.data().month;
-    const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
-    const pays = paySnap.docs.map(d => d.data());
-    for (let y = startYear; y <= year; y++) {
-      const fromMonth = (y === startYear) ? startMonth : 1;
-      const toMonth = (y === year) ? month : 12;
-      for (let m = fromMonth; m <= toMonth; m++) {
-        const mgmt = pays.filter(p => p.payYear === y && p.payMonth === m).reduce((s, p) => s + (p.fee || 0), 0);
-        const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', y), where('month', '==', m)));
-        const fins = finSnap.docs.map(d => d.data());
-        const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
-        const exp = fins.filter(f => f.type === '支出').reduce((s, f) => s + f.amount, 0);
-        balance += mgmt + otherInc - exp;
-      }
-    }
-    return Math.round(balance);
-  } catch(e) { return null; }
-}
- 
-window.saveInitBalance = async function() {
-  const val = parseFloat(document.getElementById('init-balance').value);
-  if (!val) return;
-  await setDoc(doc(db, 'settings', 'initBalance'), { value: val, year: 115, month: 1 });
-  showMsg('init-msg', `期初結餘 ${val.toLocaleString()} 元已儲存！`, true);
-  autoFillPrevBalance();
-}
-
-    // 只計算本月實際收取的管理費（fee不為'-'且不為0）
-    const mgmt = allPays
-      .filter(p => p.payMonth === month)
-      .reduce((s, p) => s + (p.fee || 0), 0);
-    const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
-    const exp = fins.filter(f => f.type === '支出').reduce((s, f) => s + f.amount, 0);
-    const totalInc = mgmt + otherInc;
-    const net = totalInc - exp;
-    const bal = prev + net;
-
-    // 分三欄住戶
-    const perCol = Math.ceil(units.length / 3);
-    const col1 = units.slice(0, perCol);
-    const col2 = units.slice(perCol, perCol * 2);
-    const col3 = units.slice(perCol * 2);
-    const maxRows = Math.max(col1.length, col2.length, col3.length);
-
-    let unitRows = '';
-    for (let i = 0; i < maxRows; i++) {
-      const renderCell = (u) => {
-        if (!u) return '<td></td><td></td><td></td><td></td><td></td>';
-        const p = payMap[u.unit];
-        const isLate = p && p.late;
-        const s = isLate ? ' style="background:#d9d9d9"' : '';
-        if (!p) return `<td${s}>${u.unit}</td><td${s}></td><td${s}></td><td${s}></td><td${s}></td>`;
-        const feeDisplay = p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee);
-        return `<td${s}>${u.unit}</td><td${s}>${p.payDate||''}</td><td${s}>${p.receipt||''}</td><td${s}>${p.period||''}</td><td${s} style="text-align:right${isLate?';background:#d9d9d9':''}">${feeDisplay}</td>`;
-      };
-      unitRows += `<tr>${renderCell(col1[i])}${renderCell(col2[i])}${renderCell(col3[i])}</tr>\n`;
-    }
-
-    // 支出項目
-    const expItems = fins.filter(f => f.type === '支出');
-    const expMid = Math.ceil(expItems.length / 2);
-    const exp1 = expItems.slice(0, expMid);
-    const exp2 = expItems.slice(expMid);
-    const expMaxRows = Math.max(exp1.length, exp2.length, 1);
-    let expRows = '';
-    for (let i = 0; i < expMaxRows; i++) {
-      expRows += `<tr>
-        <td>${exp1[i] ? exp1[i].date : ''}</td>
-        <td colspan="3">${exp1[i] ? exp1[i].item + (exp1[i].receipt ? `（${exp1[i].receipt}）` : '') : ''}</td>
-        <td class="num">${exp1[i] ? exp1[i].amount.toLocaleString() : ''}</td>
-        <td>${exp2[i] ? exp2[i].date : ''}</td>
-        <td colspan="3">${exp2[i] ? exp2[i].item + (exp2[i].receipt ? `（${exp2[i].receipt}）` : '') : ''}</td>
-        <td class="num">${exp2[i] ? exp2[i].amount.toLocaleString() : ''}</td>
-      </tr>`;
-    }
-
-    const otherItems = fins.filter(f => f.type === '收入');
-    const otherDetail = otherItems.map((f,i) => `${i+1}. ${f.item} ${f.amount.toLocaleString()}（${f.receipt||''}）`).join('　');
-    const lastDay = new Date(year + 1911, month, 0).getDate();
-
-    const html = `<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-<meta charset="UTF-8">
-<title>${year}年${month}月 泰慶天廈收支明細</title>
-<style>
-  @page { size: A4; margin: 12mm 10mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Microsoft JhengHei', '微軟正黑體', Arial, sans-serif; font-size: 9pt; color: #000; }
-  h2 { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 6px; }
-  .section-title { font-weight: bold; font-size: 9.5pt; margin: 6px 0 3px; }
-  table { width: 100%; border-collapse: collapse; }
-  td, th { border: 1px solid #888; padding: 2px 4px; font-size: 8.5pt; }
-  th { background: #dce6f1; font-weight: bold; text-align: center; }
-  .num { text-align: right; }
-  .bold { font-weight: bold; }
-  .summary-row td { font-weight: bold; background: #f2f2f2; }
-  .sign-row { margin-top: 14px; display: flex; gap: 60px; }
-  .sign-row span { flex: 1; border-bottom: 1px solid #000; padding-bottom: 2px; font-size: 10pt; }
-  .note { font-size: 8pt; color: #555; margin-top: 6px; }
-  .info-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
-</style>
-</head>
-<body>
-<h2>${year}年${month}月1日至${year}年${month}月${lastDay}日　泰慶天廈收支明細</h2>
-
-<div class="info-row">
-  <span class="section-title">(1) 收　入</span>
-  <span><strong>A、上個月餘額：${prev.toLocaleString()}</strong></span>
-</div>
-
-<table>
-  <tr>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-  </tr>
-  ${unitRows}
-  <tr class="summary-row">
-    <td colspan="10"></td>
-    <td colspan="3"><strong>B、管理費收入：</strong></td>
-    <td colspan="2" class="num"><strong>${mgmt.toLocaleString()}</strong></td>
-  </tr>
-  <tr>
-    <td colspan="5" rowspan="2" style="font-size:8pt;vertical-align:top">
-      <div><strong>收入原因：</strong></div>
-      <div>${otherDetail || '無'}</div>
-    </td>
-    <td colspan="3"><strong>其他收入：</strong></td>
-    <td colspan="2" class="num">${otherInc.toLocaleString()}</td>
-    <td colspan="5"></td>
-  </tr>
-  <tr>
-    <td colspan="3"><strong>D、收入合計(B+C)：</strong></td>
-    <td colspan="2" class="num"><strong>${totalInc.toLocaleString()}</strong></td>
-    <td colspan="5"></td>
-  </tr>
-</table>
-
-<div class="section-title" style="margin-top:8px">(2) 支　出</div>
-<table>
-  <tr>
-    <th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th>
-    <th>日期</th><th colspan="3">支出明細（二）</th><th>金額</th>
-  </tr>
-  ${expRows}
-  <tr class="summary-row">
-    <td><strong>合計：</strong></td><td colspan="3"></td>
-    <td class="num"><strong>${exp1.reduce((s,f)=>s+f.amount,0).toLocaleString()}</strong></td>
-    <td><strong>合計：</strong></td><td colspan="3"></td>
-    <td class="num"><strong>${exp2.reduce((s,f)=>s+f.amount,0).toLocaleString()}</strong></td>
-  </tr>
-  <tr class="summary-row">
-    <td colspan="3"><strong>E、支出合計：</strong></td>
-    <td colspan="2" class="num"><strong>${exp.toLocaleString()}</strong></td>
-    <td colspan="3"><strong>本期結餘(A+F)：</strong></td>
-    <td colspan="2" class="num" style="font-size:11pt;color:#1a56a0"><strong>${bal.toLocaleString()}</strong></td>
-  </tr>
-  <tr>
-    <td colspan="3"><strong>F、差異(D-E)：</strong></td>
-    <td colspan="2" class="num">${net.toLocaleString()}</td>
-    <td colspan="5"></td>
-  </tr>
-</table>
-
-<p class="note">※ 灰色底為遲交管理費住戶，無12月份優惠。</p>
-
-<div class="sign-row">
-  <span>主委：</span>
-  <span>財務：</span>
-  <span>製表人：</span>
-</div>
-
-<script>window.onload = () => window.print();</script>
-</body>
-</html>`;
-
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    showMsg('rpt-msg', `報表已開啟！本期結餘：${bal.toLocaleString()} 元`, true);
+    showMsg('rpt-msg', '報表已開啟！本期結餘：' + bal.toLocaleString() + ' 元', true);
     loadSummaryTable(year);
   } catch (e) {
     showMsg('rpt-msg', '錯誤：' + e.message, false);
