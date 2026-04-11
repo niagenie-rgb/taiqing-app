@@ -388,13 +388,21 @@ function renderReportPage(year, month) {
       <div class="card">
         <div class="card-title">產生月報表</div>
         <div class="grid2">
-          <div><label>年份（民國）</label><input type="number" id="rpt-year" value="${year}"></div>
-          <div><label>月份</label><input type="number" id="rpt-month" value="${month}" min="1" max="12"></div>
+          <div><label>年份（民國）</label><input type="number" id="rpt-year" value="${year}" onchange="autoFillPrevBalance()"></div>
+          <div><label>月份</label><input type="number" id="rpt-month" value="${month}" min="1" max="12" onchange="autoFillPrevBalance()"></div>
         </div>
         <label>上月結餘（元）</label>
-        <input type="number" id="rpt-prev" placeholder="578931">
-        <button class="btn btn-primary btn-full" id="rpt-submit">產生並下載報表 (CSV)</button>
+        <input type="number" id="rpt-prev" placeholder="自動帶入或手動輸入">
+        <p style="font-size:12px;color:#888;margin-top:4px">若有上月報表記錄會自動帶入</p>
+        <button class="btn btn-primary btn-full" id="rpt-submit">產生報表 (PDF列印)</button>
         <div id="rpt-msg"></div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #eee">
+          <div class="card-title" style="font-size:13px">設定期初結餘</div>
+          <label>115年1月期初結餘（元）</label>
+          <input type="number" id="init-balance" placeholder="623893">
+          <button class="btn btn-full" style="margin-top:8px" onclick="saveInitBalance()">儲存期初結餘</button>
+          <div id="init-msg"></div>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">${year}年度月結算</div>
