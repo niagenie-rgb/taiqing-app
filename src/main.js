@@ -250,7 +250,19 @@ window.switchTab = function(t) {
   document.querySelectorAll('.tab')[['pay','finance','query','report','settings','manage'].indexOf(t)].classList.add('active');
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + t).classList.add('active');
-  if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); autoFillPrevBalance(); }
+  if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); setTimeout(autoFillPrevBalance, 300); }
+window.autoFillPrevBalance = async function() {
+  const yearEl = document.getElementById('rpt-year');
+  const monthEl = document.getElementById('rpt-month');
+  if (!yearEl || !monthEl) return;
+  const year = parseInt(yearEl.value);
+  const month = parseInt(monthEl.value);
+  if (!year || !month) return;
+  const prevBalance = await calcBalanceUpTo(year, month - 1);
+  if (prevBalance !== null) {
+    document.getElementById('rpt-prev').value = prevBalance;
+  }
+}
 }
 
 // ========== 登記繳費 ==========
