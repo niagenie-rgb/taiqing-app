@@ -878,8 +878,8 @@ window.saveInitBalance = async function() {
 
     // 只計算本月實際收取的管理費（fee不為'-'且不為0）
     const mgmt = allPays
-      .filter(p => p.month === month && p.fee > 0)
-      .reduce((s, p) => s + p.fee, 0);
+      .filter(p => p.payMonth === month)
+      .reduce((s, p) => s + (p.fee || 0), 0);
     const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
     const exp = fins.filter(f => f.type === '支出').reduce((s, f) => s + f.amount, 0);
     const totalInc = mgmt + otherInc;
