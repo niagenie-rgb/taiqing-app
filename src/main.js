@@ -1036,9 +1036,6 @@ window.saveInitBalance = async function() {
   }
   btn.textContent = '產生報表 (PDF列印)'; btn.disabled = false;
 }
-function getLastDay(rocYear, month) {
-  return new Date(rocYear + 1911, month, 0).getDate();
-}
 
 // ========== 月結算（新版）==========
 async function loadSummaryTable(year) {
