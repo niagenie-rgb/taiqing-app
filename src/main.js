@@ -412,37 +412,158 @@ async function generateReport() {
     const mgmt = pays.reduce((s, p) => s + p.fee, 0);
     const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
     const exp = fins.filter(f => f.type === '支出').reduce((s, f) => s + f.amount, 0);
-    const total = mgmt + otherInc;
-    const net = total - exp;
+    const totalInc = mgmt + otherInc;
+    const net = totalInc - exp;
     const bal = prev + net;
-    let csv = `\uFEFF${year}年${month}月 泰慶天廈收支明細\n\n`;
-    csv += `(1) 收入\n上個月餘額,${prev.toLocaleString()}\n\n`;
-    csv += `住戶,繳交日期,收據單號,收費明細,金額,遲交\n`;
-    units.forEach(u => {
-      const p = pays.find(x => x.unit === u.unit);
-      if (p) csv += `${u.unit},${p.payDate},${p.receipt},${year}年${month}月,${p.fee},${p.late ? '遲交' : ''}\n`;
-      else csv += `${u.unit},,,,\n`;
-    });
-    csv += `\nB、管理費收入,${mgmt.toLocaleString()}\n`;
-    csv += `C、其他收入,${otherInc.toLocaleString()}\n`;
-    fins.filter(f => f.type === '收入').forEach(f => csv += `,${f.item},${f.amount},${f.receipt || ''}\n`);
-    csv += `D、收入合計,${total.toLocaleString()}\n\n`;
-    csv += `(2) 支出\n日期,項目,金額\n`;
-    fins.filter(f => f.type === '支出').forEach(f => csv += `${f.date},${f.item},${f.amount}\n`);
-    csv += `E、支出合計,${exp.toLocaleString()}\nF、差異(D-E),${net.toLocaleString()}\n本期結餘(A+F),${bal.toLocaleString()}\n`;
-    csv += `\n主委：,財務：,製表人：\n`;
-    csv += `\n備註：灰色底為遲交管理費住戶，無12月份優惠。\n`;
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = `${year}年${month}月_泰慶天廈收支明細.csv`; a.click();
-    URL.revokeObjectURL(url);
+
+    // 建立支出對照表
+    const payMap = {};
+    pays.forEach(p => { payMap[p.unit] = p; });
+
+    // 用 SheetJS 建立 Excel
+    const XLSX = window.XLSX;
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    // Row 1: 標題
+    wsData.push([' ', `${year}年${month}月1日至${year}年${month}月${getLastDay(year,month)}日  泰慶天廈收支明細`]);
+
+    // Row 2: 收入 + 上月結餘
+    wsData.push([null, '(1)  收    入', null, null, null, null, null, null, null, null, null, 'A、上個月餘額：', null, null, prev]);
+
+    // Row 3: 表頭
+    wsData.push([null, '住戶', '繳交日期', '收據單號', '收費明細(管理費)', '金額', '住戶', '繳交日期', '收據單號', '收費明細(管理費)', '金額', '住戶', '繳交日期', '收據單號', '收費明細(管理費)', '金額']);
+
+    // 分三欄放住戶
+    const perCol = Math.ceil(units.length / 3);
+    const col1 = units.slice(0, perCol);
+    const col2 = units.slice(perCol, perCol * 2);
+    const col3 = units.slice(perCol * 2);
+    const maxRows = Math.max(col1.length, col2.length, col3.length);
+
+    for (let i = 0; i < maxRows; i++) {
+      const row = [null];
+      // 欄1
+      if (col1[i]) {
+        const p = payMap[col1[i].unit];
+        row.push(col1[i].unit, p ? p.payDate : null, p ? p.receipt : null, p ? `${year}年${month}月` : null, p ? p.fee : null);
+      } else row.push(null,null,null,null,null);
+      // 欄2
+      if (col2[i]) {
+        const p = payMap[col2[i].unit];
+        row.push(col2[i].unit, p ? p.payDate : null, p ? p.receipt : null, p ? `${year}年${month}月` : null, p ? p.fee : null);
+      } else row.push(null,null,null,null,null);
+      // 欄3
+      if (col3[i]) {
+        const p = payMap[col3[i].unit];
+        row.push(col3[i].unit, p ? p.payDate : null, p ? p.receipt : null, p ? `${year}年${month}月` : null, p ? p.fee : null);
+      } else row.push(null,null,null,null,null);
+      wsData.push(row);
+    }
+
+    // 管理費收入
+    const mgmtRow = new Array(16).fill(null);
+    mgmtRow[1] = 'B、管理費收入：'; mgmtRow[15] = mgmt;
+    wsData.push(mgmtRow);
+
+    // 其他收入
+    const otherRow = new Array(16).fill(null);
+    otherRow[6] = '其他收入：'; otherRow[9] = otherInc;
+    // 收入原因
+    const otherItems = fins.filter(f => f.type === '收入');
+    const reasons = otherItems.map((f,i) => `${i+1}. ${f.item} ${f.amount}（${f.receipt||''}）`).join('\n');
+    otherRow[6] = `其他收入：`;
+    otherRow[9] = otherInc;
+    wsData.push(otherRow);
+
+    if (reasons) {
+      const reasonRow = new Array(16).fill(null);
+      reasonRow[1] = '收入原因：\n' + reasons;
+      wsData.push(reasonRow);
+    }
+
+    // 收入合計
+    const totalIncRow = new Array(16).fill(null);
+    totalIncRow[11] = 'D、收入合計(B+C)：'; totalIncRow[14] = totalInc;
+    wsData.push(totalIncRow);
+
+    // 空行
+    wsData.push([]);
+
+    // 支出標題
+    wsData.push([null, '(2)  支  出', null, null, null, null, null, null, null, null, null, '備註']);
+    wsData.push([null, '日期', '支出明細(一)', null, null, '金額', '日期', '支出明細(二)', null, null, '金額', '# 灰色底為遲交管理費住戶，無12月份優惠。']);
+
+    // 支出項目（分兩欄）
+    const expItems = fins.filter(f => f.type === '支出');
+    const expMid = Math.ceil(expItems.length / 2);
+    const exp1 = expItems.slice(0, expMid);
+    const exp2 = expItems.slice(expMid);
+    const expMaxRows = Math.max(exp1.length, exp2.length);
+    for (let i = 0; i < expMaxRows; i++) {
+      const row = [null];
+      if (exp1[i]) row.push(exp1[i].date, exp1[i].item, null, null, exp1[i].amount);
+      else row.push(null,null,null,null,null);
+      if (exp2[i]) row.push(exp2[i].date, exp2[i].item, null, null, exp2[i].amount);
+      else row.push(null,null,null,null,null);
+      wsData.push(row);
+    }
+
+    // 合計
+    wsData.push([null, '合計：', null, null, null, exp1.reduce((s,f)=>s+f.amount,0), '合計：', null, null, null, exp2.reduce((s,f)=>s+f.amount,0)]);
+
+    // 結算
+    wsData.push([null, 'E、支出合計：', null, null, null, null, null, null, null, exp, null, '本期結餘(A+F)：', null, null, bal]);
+    wsData.push([null, 'F、差異(D-E)：', null, null, null, null, null, null, null, net]);
+
+    // 空行
+    wsData.push([]);
+    wsData.push([null, '主委：', null, null, null, null, '財務：', null, null, null, null, '製表人：']);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 欄寬設定（對應 B~P 欄）
+    ws['!cols'] = [
+      {wch:6},{wch:6},{wch:9},{wch:9},{wch:15},{wch:10},
+      {wch:6},{wch:9},{wch:9},{wch:15},{wch:10},
+      {wch:6},{wch:9},{wch:9},{wch:15},{wch:10}
+    ];
+
+    // 標題合併
+    ws['!merges'] = [
+      {s:{r:0,c:1}, e:{r:0,c:15}}, // 標題
+    ];
+
+    // 灰底標示遲交住戶
+    for (let i = 0; i < maxRows; i++) {
+      const rowIdx = i + 3;
+      [[col1,1],[col2,6],[col3,11]].forEach(([col, colStart]) => {
+        if (col[i]) {
+          const p = payMap[col[i].unit];
+          if (p && p.late) {
+            for (let c = colStart; c < colStart+5; c++) {
+              const cellRef = XLSX.utils.encode_cell({r:rowIdx, c});
+              if (!ws[cellRef]) ws[cellRef] = {v:'', t:'s'};
+              ws[cellRef].s = { fill: { fgColor: { rgb: 'D9D9D9' } } };
+            }
+          }
+        }
+      });
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, `${year}年${month}月`);
+    XLSX.writeFile(wb, `${year}年${month}月_泰慶天廈收支明細.xlsx`);
+
     showMsg('rpt-msg', `報表已下載！本期結餘：${bal.toLocaleString()} 元`, true);
     loadSummaryTable(year);
   } catch (e) {
     showMsg('rpt-msg', '錯誤：' + e.message, false);
   }
-  btn.textContent = '產生並下載報表 (CSV)'; btn.disabled = false;
+  btn.textContent = '產生並下載報表 (xlsx)'; btn.disabled = false;
+}
+
+function getLastDay(rocYear, month) {
+  return new Date(rocYear + 1911, month, 0).getDate();
 }
 
 async function loadSummaryTable(year) {
