@@ -789,7 +789,6 @@ async function generateReport() {
 <table>
   <tr>
     <th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th>
-    <th>日期</th><th colspan="3">支出明細（二）</th><th>金額</th>
   </tr>
   ${expRows}
   <tr class="summary-row">
