@@ -251,6 +251,8 @@ window.switchTab = function(t) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + t).classList.add('active');
   if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); setTimeout(autoFillPrevBalance, 300); }
+}
+
 window.autoFillPrevBalance = async function() {
   const yearEl = document.getElementById('rpt-year');
   const monthEl = document.getElementById('rpt-month');
@@ -263,7 +265,6 @@ window.autoFillPrevBalance = async function() {
     document.getElementById('rpt-prev').value = prevBalance;
   }
 }
-}
 async function calcBalanceUpTo(year, month) {
   try {
     const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
@@ -271,13 +272,28 @@ async function calcBalanceUpTo(year, month) {
     let balance = initSnap.data().value;
     const startYear = initSnap.data().year;
     const startMonth = initSnap.data().month;
-    const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
-    const pays = paySnap.docs.map(d => d.data());
-    for (let y = startYear; y <= year; y++) {
+
+    // 若 month=0 表示上月為上一年12月
+    let targetYear = year;
+    let targetMonth = month;
+    if (targetMonth <= 0) {
+      targetYear = year - 1;
+      targetMonth = 12;
+    }
+
+    // 一次抓所有相關年份的 payments（避免跨年漏查）
+    const payFetches = [];
+    for (let y = startYear; y <= targetYear; y++) {
+      payFetches.push(getDocs(query(collection(db, 'payments'), where('payYear', '==', y))));
+    }
+    const paySnaps = await Promise.all(payFetches);
+    const allPays = paySnaps.flatMap(snap => snap.docs.map(d => d.data()));
+
+    for (let y = startYear; y <= targetYear; y++) {
       const fromMonth = (y === startYear) ? startMonth : 1;
-      const toMonth = (y === year) ? month : 12;
+      const toMonth = (y === targetYear) ? targetMonth : 12;
       for (let m = fromMonth; m <= toMonth; m++) {
-        const mgmt = pays.filter(p => p.payYear === y && p.payMonth === m).reduce((s, p) => s + (p.fee || 0), 0);
+        const mgmt = allPays.filter(p => p.payYear === y && p.payMonth === m).reduce((s, p) => s + (p.fee || 0), 0);
         const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', y), where('month', '==', m)));
         const fins = finSnap.docs.map(d => d.data());
         const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
