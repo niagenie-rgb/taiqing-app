@@ -489,11 +489,15 @@ async function loadSettingsTable() {
 }
 
 window.saveUnit = async function(i) {
-  const fee = parseInt(document.getElementById(`fee-${i}`).value) || 1500;
   const vacant = document.getElementById(`vacant-${i}`).checked;
-  units[i].fee = fee; units[i].vacant = vacant;
+  const baseFee = parseInt(document.getElementById(`fee-${i}`).value) || 1500;
+  const fee = vacant ? Math.round(baseFee / 2) : baseFee;
+  units[i].fee = fee;
+  units[i].baseFee = baseFee;
+  units[i].vacant = vacant;
   await setDoc(doc(db, 'units', units[i].unit), units[i]);
-  alert(`${units[i].unit} 設定已儲存！`);
+  document.getElementById(`fee-${i}`).value = fee;
+  alert(`${units[i].unit} 設定已儲存！金額：${fee} 元${vacant ? '（空屋減半）' : ''}`);
 }
 
 // ========== 啟動 ==========
