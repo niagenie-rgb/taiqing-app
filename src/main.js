@@ -240,7 +240,7 @@ window.saveFinance = async function(id) {
 }
 
 window.delFinanceManage = async function(id) {
-  if (!confirm('確定刪除此筆記錄？')) return;›
+  if (!confirm('確定刪除此筆記錄？')) return;
   await deleteDoc(doc(db, 'finances', id));
   document.getElementById(`fin-row-${id}`).remove();
 }
