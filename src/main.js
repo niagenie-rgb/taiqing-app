@@ -616,30 +616,6 @@ document.addEventListener('click', e => {
 });
 
 // ========== 月結算（新版）==========
-async function loadSummaryTable(year) {
-  const el = document.getElementById('summary-table');
-  if (!el) return;
-  const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
-  let balance = initSnap.exists() ? initSnap.data().value : 0;
-  const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
-  const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', year)));
-  const pays = paySnap.docs.map(d => d.data());
-  const fins = finSnap.docs.map(d => d.data());
-  let html = '<table><tr><th>月份</th><th>管理費收入</th><th>其他收入</th><th>支出</th><th>結餘</th></tr>';
-  let hasData = false;
-  for (let m = 1; m <= 12; m++) {
-    const mgmt = pays.filter(p => p.payMonth === m).reduce((s, p) => s + (p.fee || 0), 0);
-    const other = fins.filter(f => f.month === m && f.type === '收入').reduce((s, f) => s + f.amount, 0);
-    const exp = fins.filter(f => f.month === m && f.type === '支出').reduce((s, f) => s + f.amount, 0);
-    if (mgmt || other || exp) {
-      balance += mgmt + other - exp;
-      hasData = true;
-      html += `<tr><td>${year}年${m}月</td><td>${mgmt.toLocaleString()}</td><td>${other.toLocaleString()}</td><td>${exp.toLocaleString()}</td><td style="font-weight:500;color:#1a56a0">${Math.round(balance).toLocaleString()}</td></tr>`;
-    }
-  }
-  html += '</table>';
-  el.innerHTML = hasData ? html : '<div class="empty">尚無資料</div>';
-}
  
 function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fins, mgmt, otherInc, exp, totalInc, net, bal) {
   const lastDay = new Date(year + 1911, month, 0).getDate();
