@@ -158,14 +158,24 @@ async function submitPayment() {
   const btn = document.getElementById('pay-submit');
   btn.textContent = '登記中...'; btn.disabled = true;
   try {
-    for (const m of months) {
-      const [y, mo] = m.split('-');
-      const late = isLate(payDate, y, mo);
-      await addDoc(collection(db, 'payments'), {
-        unit, year: parseInt(y), month: parseInt(mo), payDate, receipt, fee, late, note,
-        ts: new Date().toISOString()
-      });
-    }
+    const groupId = `g${Date.now()}`;
+const groupMonths = months.map(m => parseInt(m.split('-')[1]));
+const groupStartMonth = Math.min(...groupMonths);
+const groupEndMonth = Math.max(...groupMonths);
+const totalFee = fee * months.length;
+for (const m of months) {
+  const [y, mo] = m.split('-');
+  const late = isLate(payDate, y, mo);
+  const isFirst = parseInt(mo) === groupStartMonth;
+  await addDoc(collection(db, 'payments'), {
+    unit, year: parseInt(y), month: parseInt(mo), payDate, receipt,
+    fee: isFirst ? totalFee : 0,
+    actualFee: totalFee,
+    late, note, groupId,
+    groupStartMonth, groupEndMonth,
+    ts: new Date().toISOString()
+  });
+}
     showMsg('pay-msg', `登記成功！${unit} 共 ${(fee * months.length).toLocaleString()} 元`, true);
     document.getElementById('pay-unit').value = '';
     document.getElementById('pay-months').selectedIndex = -1;
