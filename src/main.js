@@ -240,7 +240,7 @@ window.saveFinance = async function(id) {
 }
 
 window.delFinanceManage = async function(id) {
-  if (!confirm('確定刪除此筆記錄？')) return;
+  if (!confirm('確定刪除此筆記錄？')) return;›
   await deleteDoc(doc(db, 'finances', id));
   document.getElementById(`fin-row-${id}`).remove();
 }
@@ -628,157 +628,109 @@ function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fi
 
   let unitRows = '';
   for (let i = 0; i < maxRows; i++) {
-    const renderCell = (u) => {
+    const rc = (u) => {
       if (!u) return '<td></td><td></td><td></td><td></td><td></td>';
       const p = displayMap[u.unit];
-      const gray = (!p || p.late) ? 'background:#d9d9d9;' : '';
-      if (!p) return '<td style="' + gray + '">' + u.unit + '</td><td style="' + gray + '"></td><td style="' + gray + '"></td><td style="' + gray + '"></td><td style="' + gray + '"></td>';
-      const feeStr = p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee);
-      return '<td style="' + gray + '">' + u.unit + '</td><td style="' + gray + '">' + (p.payDate||'') + '</td><td style="' + gray + '">' + (p.receipt||'') + '</td><td style="' + gray + '">' + (p.period||'') + '</td><td style="' + gray + 'text-align:right">' + feeStr + '</td>';
+      const bg = (!p || p.late) ? 'background:#ccc;' : '';
+      const fee = !p ? '' : (p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee));
+      return '<td style="' + bg + '">' + u.unit + '</td>'
+        + '<td style="' + bg + '">' + (p ? p.payDate||'' : '') + '</td>'
+        + '<td style="' + bg + '">' + (p ? p.receipt||'' : '') + '</td>'
+        + '<td style="' + bg + '">' + (p ? p.period||'' : '') + '</td>'
+        + '<td style="' + bg + 'text-align:right">' + fee + '</td>';
     };
-    unitRows += '<tr>' + renderCell(col1[i]) + renderCell(col2[i]) + renderCell(col3[i]) + '</tr>\n';
+    unitRows += '<tr>' + rc(col1[i]) + rc(col2[i]) + rc(col3[i]) + '</tr>';
   }
 
   const expItems = fins.filter(f => f.type === '支出');
-  const expMid = Math.ceil(expItems.length / 2);
-  const exp1 = expItems.slice(0, expMid);
-  const exp2 = expItems.slice(expMid);
-  const expMaxRows = Math.max(exp1.length, exp2.length, 1);
+  const half = Math.ceil(expItems.length / 2);
+  const exp1 = expItems.slice(0, half);
+  const exp2 = expItems.slice(half);
+  const exp1Tot = exp1.reduce((s,f) => s+f.amount, 0);
+  const exp2Tot = exp2.reduce((s,f) => s+f.amount, 0);
   let expRows = '';
-  for (let i = 0; i < expMaxRows; i++) {
+  for (let i = 0; i < Math.max(exp1.length, exp2.length, 1); i++) {
     expRows += '<tr>'
-      + '<td>' + (exp1[i] ? exp1[i].date : '') + '</td>'
-      + '<td colspan="3">' + (exp1[i] ? exp1[i].item + (exp1[i].receipt ? '（' + exp1[i].receipt + '）' : '') : '') + '</td>'
-      + '<td style="text-align:right">' + (exp1[i] ? exp1[i].amount.toLocaleString() : '') + '</td>'
-      + '<td>' + (exp2[i] ? exp2[i].date : '') + '</td>'
-      + '<td colspan="3">' + (exp2[i] ? exp2[i].item + (exp2[i].receipt ? '（' + exp2[i].receipt + '）' : '') : '') + '</td>'
-      + '<td style="text-align:right">' + (exp2[i] ? exp2[i].amount.toLocaleString() : '') + '</td>'
+      + '<td>' + (exp1[i]?exp1[i].date:'') + '</td>'
+      + '<td colspan="2">' + (exp1[i]?exp1[i].item + (exp1[i].receipt?'（'+exp1[i].receipt+'）':''):'') + '</td>'
+      + '<td class="r">' + (exp1[i]?exp1[i].amount.toLocaleString():'') + '</td>'
+      + '<td>' + (exp2[i]?exp2[i].date:'') + '</td>'
+      + '<td colspan="2">' + (exp2[i]?exp2[i].item + (exp2[i].receipt?'（'+exp2[i].receipt+'）':''):'') + '</td>'
+      + '<td class="r">' + (exp2[i]?exp2[i].amount.toLocaleString():'') + '</td>'
       + '</tr>';
   }
 
-  const otherItems = fins.filter(f => f.type === '收入');
-  const otherDetail = otherItems.map((f, i) => (i+1) + '. ' + f.item + ' ' + f.amount.toLocaleString() + '元（' + (f.receipt||'') + '）').join('　');
-  const exp1Total = exp1.reduce((s,f) => s+f.amount, 0).toLocaleString();
-  const exp2Total = exp2.reduce((s,f) => s+f.amount, 0).toLocaleString();
+  const otherDetail = fins.filter(f=>f.type==='收入').map((f,i)=>(i+1)+'. '+f.item+' '+f.amount.toLocaleString()+'元'+(f.receipt?'('+f.receipt+')':'')).join('　');
 
-  const css = [
-    '@page{size:A4 portrait;margin:10mm 8mm}',
-    '*{box-sizing:border-box;margin:0;padding:0}',
-    'html{-webkit-print-color-adjust:exact;print-color-adjust:exact}',
-    'body{font-family:"Microsoft JhengHei","微軟正黑體","PingFang TC",Arial,sans-serif;font-size:8.5pt;color:#000;height:267mm;display:flex;flex-direction:column}',
-    'h2{text-align:center;font-size:11pt;font-weight:bold;margin-bottom:4px;letter-spacing:1px}',
-    '.hrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}',
-    '.stitle{font-weight:bold;font-size:9pt}',
-    '.prev{font-weight:bold;font-size:9pt}',
-    'table{width:100%;border-collapse:collapse;table-layout:fixed}',
-    '.unit-table td,.unit-table th{border:0.8px solid #555;padding:1.5px 2px;font-size:7.8pt;overflow:hidden;white-space:nowrap}',
-    '.unit-table th{background:#ccd9f0;font-weight:bold;text-align:center;font-size:7.5pt;padding:2px}',
-    '.exp-table td,.exp-table th{border:0.8px solid #555;padding:2px 3px;font-size:8pt;overflow:hidden;white-space:nowrap}',
-    '.exp-table th{background:#ccd9f0;font-weight:bold;text-align:center;font-size:8pt;padding:2.5px}',
-    '.sr{background:#e0e0e0}',
-    '.sr td{font-weight:bold;font-size:8.5pt;padding:2.5px 3px}',
-    '.total-row td{font-weight:bold;font-size:9.5pt;padding:3px;background:#e8e8e8}',
-    '.sign-row{display:flex;margin-top:5px;gap:30px}',
-    '.sign-row span{flex:1;border-bottom:0.8px solid #000;font-size:9pt;padding-bottom:2px}',
-    '.note{font-size:7.5pt;color:#444;margin-top:3px;border:0.8px solid #888;padding:2px 4px;background:#f5f5f5}',
-    '.gap{margin-top:4px}',
-    '.spacer{flex:1}',
-    'col.cu{width:5.5%}col.cd{width:7%}col.cr{width:7%}col.cp{width:10%}col.cf{width:6.5%}',
-  ].join('');
+  return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">'
+    + '<title>' + year + '年' + month + '月收支明細</title>'
+    + '<style>'
+    + '@page{size:A4;margin:10mm 8mm}'
+    + '*{margin:0;padding:0;box-sizing:border-box}'
+    + 'html{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + 'body{font-family:"Microsoft JhengHei","PingFang TC",Arial,sans-serif;font-size:9pt;color:#111;padding:0}'
+    + 'h1{text-align:center;font-size:12pt;font-weight:bold;padding:4px 0 6px;border-bottom:2px solid #333;margin-bottom:5px}'
+    + '.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}'
+    + '.sec{font-weight:bold;font-size:10pt;color:#1a3a7a;border-left:4px solid #1a3a7a;padding-left:5px}'
+    + '.prev-bal{font-size:9.5pt;font-weight:bold}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'td,th{border:1px solid #888;padding:1.5px 2.5px;font-size:8pt;overflow:hidden;white-space:nowrap}'
+    + '.ut th{background:#1a3a7a;color:white;font-weight:bold;font-size:7.5pt;text-align:center;padding:2.5px}'
+    + '.ut td{font-size:7.5pt}'
+    + '.sum-bar{background:#e8eef8;font-weight:bold}'
+    + '.sum-bar td{padding:3px 4px;font-size:8.5pt;border:1px solid #888}'
+    + '.et th{background:#2a5a2a;color:white;font-weight:bold;font-size:8.5pt;text-align:center;padding:3px}'
+    + '.et td{font-size:8.5pt;padding:2px 3px}'
+    + '.tot-row td{background:#1a3a7a;color:white;font-weight:bold;font-size:10pt;padding:4px 5px;border:1px solid #0d2050}'
+    + '.r{text-align:right}'
+    + '.note{font-size:7.5pt;color:#555;margin-top:4px;padding:2px 5px;border:1px solid #aaa;background:#f8f8f8}'
+    + '.sign{display:flex;gap:20px;margin-top:8px}'
+    + '.sign div{flex:1;border-bottom:1px solid #333;padding-bottom:3px;font-size:9.5pt}'
+    + '</style></head><body>'
 
-  const lines = [
-    '<!DOCTYPE html>',
-    '<html lang="zh-TW">',
-    '<head>',
-    '<meta charset="UTF-8">',
-    '<title>' + year + '年' + month + '月 泰慶天廈收支明細</title>',
-    '<style>' + css + '</style>',
-    '</head>',
-    '<body>',
-    '<h2>' + year + '年' + month + '月1日至' + year + '年' + month + '月' + lastDay + '日　泰慶天廈收支明細</h2>',
+    + '<h1>' + year + '年' + month + '月1日至' + year + '年' + month + '月' + lastDay + '日　泰慶天廈收支明細</h1>'
 
-    '<div class="hrow">',
-    '<span class="stitle">(1) 收　入</span>',
-    '<span class="prev">A、上個月餘額：' + prev.toLocaleString() + ' 元</span>',
-    '</div>',
+    + '<div class="top-bar"><span class="sec">（一）收　入</span><span class="prev-bal">▶ 上個月餘額：' + prev.toLocaleString() + ' 元</span></div>'
 
-    '<table class="unit-table">',
-    '<colgroup>',
-    '<col class="cu"><col class="cd"><col class="cr"><col class="cp"><col class="cf">',
-    '<col class="cu"><col class="cd"><col class="cr"><col class="cp"><col class="cf">',
-    '<col class="cu"><col class="cd"><col class="cr"><col class="cp"><col class="cf">',
-    '</colgroup>',
-    '<tr><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>',
-    '<th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>',
-    '<th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th></tr>',
-    unitRows,
-    '</table>',
+    + '<table class="ut">'
+    + '<colgroup><col style="width:5.2%"><col style="width:6.5%"><col style="width:7%"><col style="width:10%"><col style="width:7.3%"><col style="width:5.2%"><col style="width:6.5%"><col style="width:7%"><col style="width:10%"><col style="width:7.3%"><col style="width:5.2%"><col style="width:6.5%"><col style="width:7%"><col style="width:10%"><col style="width:7.3%"></colgroup>'
+    + '<tr><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>'
+    + '<th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>'
+    + '<th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th></tr>'
+    + unitRows
+    + '</table>'
 
-    '<table class="unit-table" style="margin-top:1px">',
-    '<colgroup>',
-    '<col style="width:36.5%"><col style="width:9%"><col style="width:9%"><col style="width:9%">',
-    '<col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%">',
-    '</colgroup>',
-    '<tr class="sr">',
-    '<td style="border:0.8px solid #555"><strong>收入原因：</strong>' + (otherDetail||'無') + '</td>',
-    '<td colspan="2" style="text-align:left;border:0.8px solid #555"><strong>B、管理費收入：</strong></td>',
-    '<td style="text-align:right;border:0.8px solid #555"><strong>' + mgmt.toLocaleString() + '</strong></td>',
-    '<td colspan="2" style="text-align:left;border:0.8px solid #555"><strong>其他收入(C)：</strong></td>',
-    '<td style="text-align:right;border:0.8px solid #555"><strong>' + otherInc.toLocaleString() + '</strong></td>',
-    '<td style="text-align:right;border:0.8px solid #555;background:#d0dff0"><strong>D合計：' + totalInc.toLocaleString() + '</strong></td>',
-    '</tr>',
-    '</table>',
+    + '<table class="sum-bar" style="margin-top:2px"><colgroup><col style="width:40%"><col style="width:15%"><col style="width:12%"><col style="width:15%"><col style="width:12%"><col style="width:6%"></colgroup>'
+    + '<tr><td><strong>其他收入原因：</strong>' + (otherDetail||'無') + '</td>'
+    + '<td><strong>B. 管理費收入：</strong></td><td class="r"><strong>' + mgmt.toLocaleString() + '</strong></td>'
+    + '<td><strong>C. 其他收入：</strong></td><td class="r"><strong>' + otherInc.toLocaleString() + '</strong></td>'
+    + '<td class="r" style="background:#1a3a7a;color:white"><strong>D.合計<br>' + totalInc.toLocaleString() + '</strong></td>'
+    + '</tr></table>'
 
-    '<div class="hrow gap"><span class="stitle">(2) 支　出</span></div>',
+    + '<div class="top-bar" style="margin-top:5px"><span class="sec">（二）支　出</span></div>'
 
-    '<table class="exp-table">',
-    '<colgroup>',
-    '<col style="width:8%"><col style="width:29%"><col style="width:1%"><col style="width:1%"><col style="width:9%">',
-    '<col style="width:8%"><col style="width:29%"><col style="width:1%"><col style="width:1%"><col style="width:9%">',
-    '</colgroup>',
-    '<tr><th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th><th>日期</th><th colspan="3">支出明細（二）</th><th>金額</th></tr>',
-    expRows,
-    '<tr class="sr">',
-    '<td colspan="4"><strong>合計（一）：</strong></td><td style="text-align:right"><strong>' + exp1Total + '</strong></td>',
-    '<td colspan="4"><strong>合計（二）：</strong></td><td style="text-align:right"><strong>' + exp2Total + '</strong></td>',
-    '</tr>',
-    '</table>',
+    + '<table class="et"><colgroup><col style="width:8%"><col style="width:26%"><col style="width:1%"><col style="width:13%"><col style="width:8%"><col style="width:26%"><col style="width:1%"><col style="width:13%"></colgroup>'
+    + '<tr><th>日期</th><th colspan="2">支出明細（一）</th><th>金額</th><th>日期</th><th colspan="2">支出明細（二）</th><th>金額</th></tr>'
+    + expRows
+    + '<tr class="sum-bar"><td colspan="2"><strong>合計（一）</strong></td><td></td><td class="r"><strong>' + exp1Tot.toLocaleString() + '</strong></td>'
+    + '<td colspan="2"><strong>合計（二）</strong></td><td></td><td class="r"><strong>' + exp2Tot.toLocaleString() + '</strong></td></tr>'
+    + '</table>'
 
-    '<table class="exp-table" style="margin-top:1px">',
-    '<colgroup>',
-    '<col style="width:20%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:17%">',
-    '</colgroup>',
-    '<tr class="total-row">',
-    '<td><strong>E、支出合計：</strong></td>',
-    '<td style="text-align:right"><strong>' + exp.toLocaleString() + '</strong></td>',
-    '<td style="text-align:right"><strong>F、差異(D-E)：' + net.toLocaleString() + '</strong></td>',
-    '<td><strong>本期結餘(A+F)：</strong></td>',
-    '<td colspan="2" style="text-align:right;font-size:11pt;color:#1a3a7a"><strong>' + bal.toLocaleString() + '</strong></td>',
-    '</tr>',
-    '</table>',
+    + '<table style="margin-top:2px"><colgroup><col style="width:18%"><col style="width:14%"><col style="width:18%"><col style="width:14%"><col style="width:20%"><col style="width:16%"></colgroup>'
+    + '<tr class="tot-row">'
+    + '<td>E. 支出合計：</td><td class="r">' + exp.toLocaleString() + '</td>'
+    + '<td>F. 差異(D-E)：</td><td class="r">' + net.toLocaleString() + '</td>'
+    + '<td>★ 本期結餘(A+F)：</td><td class="r" style="font-size:13pt">' + bal.toLocaleString() + '</td>'
+    + '</tr></table>'
 
-    '<div class="spacer"></div>',
+    + '<div class="note">※ 灰色底為未繳費或遲交管理費住戶，無12月份優惠。</div>'
 
-    '<div class="note">※ 灰色底為未繳費或遲交管理費住戶，無12月份優惠。</div>',
-    '<div class="sign-row">',
-    '<span>主委：</span>',
-    '<span>財務：</span>',
-    '<span>製表人：</span>',
-    '</div>',
+    + '<div class="sign"><div>主委：</div><div>財務：</div><div>製表人：</div></div>'
 
-    '<script>',
-    'window.onload=function(){',
-    '  var style=document.createElement("style");',
-    '  style.textContent="@media print{@page{margin:10mm 8mm}body{-webkit-print-color-adjust:exact}}";',
-    '  document.head.appendChild(style);',
-    '  setTimeout(function(){window.print();},300);',
-    '};',
-    '<\/script>',
-    '</body>',
-    '</html>'
-  ];
-  return lines.join('\n');
+    + '<script>setTimeout(function(){window.print();},400);<\/script>'
+    + '</body></html>';
 }
+
 async function generateReport() {
   const year = parseInt(document.getElementById('rpt-year').value);
   const month = parseInt(document.getElementById('rpt-month').value);
