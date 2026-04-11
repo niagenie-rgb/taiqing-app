@@ -62,6 +62,7 @@ function renderApp() {
       <button class="tab" onclick="switchTab('query')">🔍 查詢狀況</button>
       <button class="tab" onclick="switchTab('report')">📊 產生報表</button>
       <button class="tab" onclick="switchTab('settings')">⚙️ 住戶設定</button>
+      <button class="tab" onclick="switchTab('manage')">🔧 資料管理</button>
     </div>
 
     <div id="page-pay" class="page active">${renderPayPage(year, month)}</div>
