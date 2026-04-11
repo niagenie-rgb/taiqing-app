@@ -808,7 +808,12 @@ window.saveUnit = async function(i) {
   document.getElementById(`fee-${i}`).value = fee;
   alert(`${units[i].unit} 設定已儲存！金額：${fee} 元${vacant ? '（空屋減半）' : ''}`);
 }
-
+window.saveInitBalance = async function() {
+  const val = parseFloat(document.getElementById('init-balance').value);
+  if (!val) return;
+  await setDoc(doc(db, 'settings', 'initBalance'), { value: val, year: 115, month: 1 });
+  showMsg('init-msg', '期初結餘 ' + val.toLocaleString() + ' 元已儲存！', true);
+}
 // ========== 啟動 ==========
 async function init() {
   document.getElementById('app').innerHTML = '<div style="text-align:center;padding:60px;color:#666">系統載入中...</div>';
