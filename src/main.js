@@ -250,6 +250,7 @@ window.switchTab = function(t) {
   document.querySelectorAll('.tab')[['pay','finance','query','report','settings','manage'].indexOf(t)].classList.add('active');
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + t).classList.add('active');
+  if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); autoFillPrevBalance(); }
 }
 
 // ========== 登記繳費 ==========
