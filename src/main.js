@@ -264,7 +264,30 @@ window.autoFillPrevBalance = async function() {
   }
 }
 }
-
+async function calcBalanceUpTo(year, month) {
+  try {
+    const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
+    if (!initSnap.exists()) return null;
+    let balance = initSnap.data().value;
+    const startYear = initSnap.data().year;
+    const startMonth = initSnap.data().month;
+    const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
+    const pays = paySnap.docs.map(d => d.data());
+    for (let y = startYear; y <= year; y++) {
+      const fromMonth = (y === startYear) ? startMonth : 1;
+      const toMonth = (y === year) ? month : 12;
+      for (let m = fromMonth; m <= toMonth; m++) {
+        const mgmt = pays.filter(p => p.payYear === y && p.payMonth === m).reduce((s, p) => s + (p.fee || 0), 0);
+        const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', y), where('month', '==', m)));
+        const fins = finSnap.docs.map(d => d.data());
+        const otherInc = fins.filter(f => f.type === '收入').reduce((s, f) => s + f.amount, 0);
+        const exp = fins.filter(f => f.type === '支出').reduce((s, f) => s + f.amount, 0);
+        balance += mgmt + otherInc - exp;
+      }
+    }
+    return Math.round(balance);
+  } catch(e) { return null; }
+}
 // ========== 登記繳費 ==========
 function renderPayPage(year, month) {
   const unitOpts = units.map(u =>
