@@ -1020,7 +1020,7 @@ window.saveInitBalance = async function() {
   <span>製表人：</span>
 </div>
 
-<scr' + 'ipt>window.onload = () => window.print();</scr' + 'ipt>
+<script>window.onload = () => window.print();</script>
 </body>
 </html>`;
 
