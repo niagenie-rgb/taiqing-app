@@ -755,6 +755,7 @@ async function loadSummaryTable(year) {
   if (!el) return;
   const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
   let balance = initSnap.exists() ? initSnap.data().value : 0;
+// 期初結餘是1月開始前的結餘，直接從這個值開始累加
   const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
   const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', year)));
   const pays = paySnap.docs.map(d => d.data());
