@@ -70,6 +70,7 @@ function renderApp() {
     <div id="page-query" class="page">${renderQueryPage(year)}</div>
     <div id="page-report" class="page">${renderReportPage(year, month)}</div>
     <div id="page-settings" class="page">${renderSettingsPage()}</div>
+    <div id="page-manage" class="page">${renderManagePage()}</div>
   `;
   bindPayEvents();
   bindFinanceEvents();
@@ -79,11 +80,174 @@ function renderApp() {
   loadSummaryTable(year);
   loadSettingsTable();
 }
+// ========== 資料管理 ==========
+function renderManagePage() {
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">繳費記錄管理</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <label>搜尋住戶</label>
+          <input type="text" id="manage-unit" placeholder="例：1F 或 8F-5" list="unit-list">
+          <datalist id="unit-list"></datalist>
+        </div>
+        <div><label>年份</label><input type="number" id="manage-year" value="115" style="width:80px"></div>
+        <div><label>月份（空白=全部）</label><input type="number" id="manage-month" placeholder="全部" style="width:80px" min="1" max="12"></div>
+        <div><button class="btn btn-primary" onclick="searchPayments()">搜尋</button></div>
+      </div>
+      <div id="manage-pay-list" class="overflow-x" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">收支記錄管理</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div><label>年份</label><input type="number" id="manage-fin-year" value="115" style="width:80px"></div>
+        <div><label>月份（空白=全部）</label><input type="number" id="manage-fin-month" placeholder="全部" style="width:80px" min="1" max="12"></div>
+        <div><label>類型</label>
+          <select id="manage-fin-type" style="width:120px">
+            <option value="">全部</option>
+            <option value="收入">收入</option>
+            <option value="支出">支出</option>
+          </select>
+        </div>
+        <div><button class="btn btn-primary" onclick="searchFinances()">搜尋</button></div>
+      </div>
+      <div id="manage-fin-list" class="overflow-x" style="margin-top:14px"></div>
+    </div>`;
+}
 
+window.searchPayments = async function() {
+  const unit = document.getElementById('manage-unit').value.trim();
+  const year = parseInt(document.getElementById('manage-year').value);
+  const month = parseInt(document.getElementById('manage-month').value) || 0;
+  const el = document.getElementById('manage-pay-list');
+  el.innerHTML = '<div class="loading">搜尋中...</div>';
+
+  let q;
+  if (unit) {
+    q = month
+      ? query(collection(db, 'payments'), where('unit','==',unit), where('year','==',year), where('month','==',month))
+      : query(collection(db, 'payments'), where('unit','==',unit), where('year','==',year));
+  } else {
+    q = month
+      ? query(collection(db, 'payments'), where('year','==',year), where('month','==',month))
+      : query(collection(db, 'payments'), where('year','==',year));
+  }
+
+  const snap = await getDocs(q);
+  const list = snap.docs.map(d => ({id: d.id, ...d.data()}));
+  list.sort((a,b) => a.month - b.month || (a.unit > b.unit ? 1 : -1));
+
+  if (!list.length) { el.innerHTML = '<div class="empty">查無記錄</div>'; return; }
+
+  el.innerHTML = `<table>
+    <tr><th>住戶</th><th>年</th><th>月</th><th>繳費日期</th><th>收據編號</th><th>金額</th><th>遲交</th><th>備註</th><th>操作</th></tr>
+    ${list.map(p => `<tr id="pay-row-${p.id}">
+      <td><input value="${p.unit}" style="width:65px;padding:3px 5px" id="pu-${p.id}"></td>
+      <td><input type="number" value="${p.year}" style="width:50px;padding:3px 5px" id="py-${p.id}"></td>
+      <td><input type="number" value="${p.month}" style="width:40px;padding:3px 5px" id="pm-${p.id}"></td>
+      <td><input value="${p.payDate||''}" style="width:75px;padding:3px 5px" id="pd-${p.id}"></td>
+      <td><input value="${p.receipt||''}" style="width:75px;padding:3px 5px" id="pr-${p.id}"></td>
+      <td><input type="number" value="${p.fee||0}" style="width:70px;padding:3px 5px" id="pf-${p.id}"></td>
+      <td><select id="pl-${p.id}" style="width:60px;padding:3px 2px">
+        <option value="false" ${!p.late?'selected':''}>否</option>
+        <option value="true" ${p.late?'selected':''}>是</option>
+      </select></td>
+      <td><input value="${p.note||''}" style="width:100px;padding:3px 5px" id="pn-${p.id}"></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-primary btn-sm" onclick="savePayment('${p.id}')">存</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:3px" onclick="delPayment('${p.id}')">刪</button>
+      </td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+window.savePayment = async function(id) {
+  const data = {
+    unit: document.getElementById(`pu-${id}`).value.trim(),
+    year: parseInt(document.getElementById(`py-${id}`).value),
+    month: parseInt(document.getElementById(`pm-${id}`).value),
+    payDate: document.getElementById(`pd-${id}`).value.trim(),
+    receipt: document.getElementById(`pr-${id}`).value.trim(),
+    fee: parseFloat(document.getElementById(`pf-${id}`).value) || 0,
+    late: document.getElementById(`pl-${id}`).value === 'true',
+    note: document.getElementById(`pn-${id}`).value.trim(),
+  };
+  await setDoc(doc(db, 'payments', id), data, { merge: true });
+  const row = document.getElementById(`pay-row-${id}`);
+  row.style.background = '#e6f4ea';
+  setTimeout(() => row.style.background = '', 1500);
+}
+
+window.delPayment = async function(id) {
+  if (!confirm('確定刪除此筆繳費記錄？')) return;
+  await deleteDoc(doc(db, 'payments', id));
+  document.getElementById(`pay-row-${id}`).remove();
+}
+
+window.searchFinances = async function() {
+  const year = parseInt(document.getElementById('manage-fin-year').value);
+  const month = parseInt(document.getElementById('manage-fin-month').value) || 0;
+  const type = document.getElementById('manage-fin-type').value;
+  const el = document.getElementById('manage-fin-list');
+  el.innerHTML = '<div class="loading">搜尋中...</div>';
+
+  let q = month
+    ? query(collection(db, 'finances'), where('year','==',year), where('month','==',month))
+    : query(collection(db, 'finances'), where('year','==',year));
+
+  const snap = await getDocs(q);
+  let list = snap.docs.map(d => ({id: d.id, ...d.data()}));
+  if (type) list = list.filter(f => f.type === type);
+  list.sort((a,b) => a.month - b.month);
+
+  if (!list.length) { el.innerHTML = '<div class="empty">查無記錄</div>'; return; }
+
+  el.innerHTML = `<table>
+    <tr><th>月</th><th>日</th><th>類型</th><th>項目</th><th>金額</th><th>收據</th><th>備註</th><th>操作</th></tr>
+    ${list.map(f => `<tr id="fin-row-${f.id}">
+      <td><input type="number" value="${f.month||''}" style="width:40px;padding:3px 5px" id="fm-${f.id}"></td>
+      <td><input value="${f.date||''}" style="width:75px;padding:3px 5px" id="fd-${f.id}"></td>
+      <td><select id="ft-${f.id}" style="width:60px;padding:3px 2px">
+        <option value="收入" ${f.type==='收入'?'selected':''}>收入</option>
+        <option value="支出" ${f.type==='支出'?'selected':''}>支出</option>
+      </select></td>
+      <td><input value="${f.item||''}" style="width:130px;padding:3px 5px" id="fi-${f.id}"></td>
+      <td><input type="number" value="${f.amount||0}" style="width:80px;padding:3px 5px" id="fa-${f.id}"></td>
+      <td><input value="${f.receipt||''}" style="width:80px;padding:3px 5px" id="fr-${f.id}"></td>
+      <td><input value="${f.note||''}" style="width:100px;padding:3px 5px" id="fn-${f.id}"></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-primary btn-sm" onclick="saveFinance('${f.id}')">存</button>
+        <button class="btn btn-danger btn-sm" style="margin-left:3px" onclick="delFinanceManage('${f.id}')">刪</button>
+      </td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+window.saveFinance = async function(id) {
+  const data = {
+    month: parseInt(document.getElementById(`fm-${id}`).value),
+    date: document.getElementById(`fd-${id}`).value.trim(),
+    type: document.getElementById(`ft-${id}`).value,
+    item: document.getElementById(`fi-${id}`).value.trim(),
+    amount: parseFloat(document.getElementById(`fa-${id}`).value) || 0,
+    receipt: document.getElementById(`fr-${id}`).value.trim(),
+    note: document.getElementById(`fn-${id}`).value.trim(),
+  };
+  await setDoc(doc(db, 'finances', id), data, { merge: true });
+  const row = document.getElementById(`fin-row-${id}`);
+  row.style.background = '#e6f4ea';
+  setTimeout(() => row.style.background = '', 1500);
+}
+
+window.delFinanceManage = async function(id) {
+  if (!confirm('確定刪除此筆記錄？')) return;
+  await deleteDoc(doc(db, 'finances', id));
+  document.getElementById(`fin-row-${id}`).remove();
+}
 window.switchTab = function(t) {
   currentTab = t;
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab')[['pay','finance','query','report','settings'].indexOf(t)].classList.add('active');
+  document.querySelectorAll('.tab')[['pay','finance','query','report','settings','manage'].indexOf(t)].classList.add('active');
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + t).classList.add('active');
 }
