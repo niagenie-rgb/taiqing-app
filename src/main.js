@@ -204,11 +204,12 @@ async function loadPaySummary(year, month) {
     <div class="stat"><div class="stat-label">${year}年${month}月收入</div><div class="stat-val">${total.toLocaleString()}</div></div>
     <div class="stat"><div class="stat-label">遲交筆數</div><div class="stat-val" style="color:${lateCount > 0 ? '#c62828' : '#2e7d32'}">${lateCount}</div></div>`;
   if (!list.length) { el.innerHTML = '<div class="empty">本月尚無繳費記錄</div>'; return; }
-  el.innerHTML = `<table><tr><th>住戶</th><th>日期</th><th>收據</th><th>金額</th><th>狀態</th></tr>
+  el.innerHTML = `<table><tr><th>住戶</th><th>日期</th><th>收據</th><th>金額</th><th>狀態</th><th></th></tr>
     ${list.slice().reverse().map(p => `<tr class="${p.late ? 'row-late' : ''}">
       <td>${p.unit}</td><td>${p.payDate}</td><td>${p.receipt}</td>
       <td>${p.fee.toLocaleString()}</td>
       <td><span class="badge ${p.late ? 'badge-late' : 'badge-ok'}">${p.late ? '遲交' : '準時'}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePayment('${p.id}',${year},${month})">刪</button></td>
     </tr>`).join('')}</table>`;
 }
 
@@ -325,7 +326,11 @@ window.deleteFinance = async function(id, year, month) {
   await deleteDoc(doc(db, 'finances', id));
   loadFinanceList(year, month);
 }
-
+window.deletePayment = async function(id, year, month) {
+  if (!confirm('確定刪除此筆繳費記錄？')) return;
+  await deleteDoc(doc(db, 'payments', id));
+  loadPaySummary(year, month);
+}
 // ========== 查詢 ==========
 function renderQueryPage(year) {
   return `
