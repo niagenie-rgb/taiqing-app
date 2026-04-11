@@ -624,19 +624,23 @@ function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fi
   const col2 = units.slice(perCol, perCol * 2);
   const col3 = units.slice(perCol * 2);
   const maxRows = Math.max(col1.length, col2.length, col3.length);
+
   let unitRows = '';
   for (let i = 0; i < maxRows; i++) {
     const renderCell = (u) => {
       if (!u) return '<td></td><td></td><td></td><td></td><td></td>';
       const p = displayMap[u.unit];
       const isLate = p && p.late;
-      const s = isLate ? ' style="background:#d9d9d9"' : '';
-      if (!p) return '<td' + s + '>' + u.unit + '</td><td' + s + '></td><td' + s + '></td><td' + s + '></td><td' + s + '></td>';
+      const noPayment = !p;
+      const gray = (isLate || noPayment) ? ' style="background:#d9d9d9"' : '';
+      if (!p) return '<td' + gray + '>' + u.unit + '</td><td' + gray + '></td><td' + gray + '></td><td' + gray + '></td><td' + gray + '></td>';
       const feeStr = p.fee === '-' ? '-' : (typeof p.fee === 'number' ? p.fee.toLocaleString() : p.fee);
-      return '<td' + s + '>' + u.unit + '</td><td' + s + '>' + (p.payDate||'') + '</td><td' + s + '>' + (p.receipt||'') + '</td><td' + s + '>' + (p.period||'') + '</td><td' + s + ' style="text-align:right' + (isLate ? ';background:#d9d9d9' : '') + '">' + feeStr + '</td>';
+      const numStyle = ' style="text-align:right' + (isLate ? ';background:#d9d9d9' : '') + '"';
+      return '<td' + gray + '>' + u.unit + '</td><td' + gray + '>' + (p.payDate||'') + '</td><td' + gray + '>' + (p.receipt||'') + '</td><td' + gray + '>' + (p.period||'') + '</td><td' + numStyle + '>' + feeStr + '</td>';
     };
     unitRows += '<tr>' + renderCell(col1[i]) + renderCell(col2[i]) + renderCell(col3[i]) + '</tr>\n';
   }
+
   const expItems = fins.filter(f => f.type === '支出');
   const expMid = Math.ceil(expItems.length / 2);
   const exp1 = expItems.slice(0, expMid);
@@ -644,12 +648,20 @@ function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fi
   const expMaxRows = Math.max(exp1.length, exp2.length, 1);
   let expRows = '';
   for (let i = 0; i < expMaxRows; i++) {
-    expRows += '<tr><td>' + (exp1[i] ? exp1[i].date : '') + '</td><td colspan="3">' + (exp1[i] ? exp1[i].item + (exp1[i].receipt ? '（' + exp1[i].receipt + '）' : '') : '') + '</td><td class="num">' + (exp1[i] ? exp1[i].amount.toLocaleString() : '') + '</td><td>' + (exp2[i] ? exp2[i].date : '') + '</td><td colspan="3">' + (exp2[i] ? exp2[i].item + (exp2[i].receipt ? '（' + exp2[i].receipt + '）' : '') : '') + '</td><td class="num">' + (exp2[i] ? exp2[i].amount.toLocaleString() : '') + '</td></tr>';
+    expRows += '<tr>'
+      + '<td>' + (exp1[i] ? exp1[i].date : '') + '</td>'
+      + '<td colspan="3">' + (exp1[i] ? exp1[i].item + (exp1[i].receipt ? '（' + exp1[i].receipt + '）' : '') : '') + '</td>'
+      + '<td class="num">' + (exp1[i] ? exp1[i].amount.toLocaleString() : '') + '</td>'
+      + '<td>' + (exp2[i] ? exp2[i].date : '') + '</td>'
+      + '<td colspan="3">' + (exp2[i] ? exp2[i].item + (exp2[i].receipt ? '（' + exp2[i].receipt + '）' : '') : '') + '</td>'
+      + '<td class="num">' + (exp2[i] ? exp2[i].amount.toLocaleString() : '') + '</td>'
+      + '</tr>';
   }
+
   const otherItems = fins.filter(f => f.type === '收入');
-  const otherDetail = otherItems.map((f, i) => (i+1) + '. ' + f.item + ' ' + f.amount.toLocaleString() + '（' + (f.receipt||'') + '）').join('　');
-  const exp1Total = exp1.reduce((s,f) => s + f.amount, 0).toLocaleString();
-  const exp2Total = exp2.reduce((s,f) => s + f.amount, 0).toLocaleString();
+  const otherDetail = otherItems.map((f, i) => (i+1) + '. ' + f.item + ' ' + f.amount.toLocaleString() + '元（' + (f.receipt||'') + '）').join('　');
+  const exp1Total = exp1.reduce((s,f) => s+f.amount, 0).toLocaleString();
+  const exp2Total = exp2.reduce((s,f) => s+f.amount, 0).toLocaleString();
 
   const lines = [
     '<!DOCTYPE html>',
@@ -658,42 +670,67 @@ function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fi
     '<meta charset="UTF-8">',
     '<title>' + year + '年' + month + '月 泰慶天廈收支明細</title>',
     '<style>',
-    '@page{size:A4;margin:12mm 10mm}',
+    '@page{size:A4 portrait;margin:8mm 8mm}',
     '*{box-sizing:border-box;margin:0;padding:0}',
-    'body{font-family:"Microsoft JhengHei",Arial,sans-serif;font-size:9pt;color:#000}',
-    'h2{text-align:center;font-size:11pt;font-weight:bold;margin-bottom:6px}',
-    '.st{font-weight:bold;font-size:9.5pt;margin:6px 0 3px}',
-    'table{width:100%;border-collapse:collapse}',
-    'td,th{border:1px solid #888;padding:2px 4px;font-size:8.5pt}',
-    'th{background:#dce6f1;font-weight:bold;text-align:center}',
+    'html,body{width:100%;height:100%}',
+    'body{font-family:"Microsoft JhengHei","微軟正黑體","PingFang TC",Arial,sans-serif;font-size:7.5pt;color:#000}',
+    'h2{text-align:center;font-size:10pt;font-weight:bold;margin-bottom:3px;letter-spacing:1px}',
+    '.header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}',
+    '.section-title{font-weight:bold;font-size:8pt}',
+    '.prev-balance{font-weight:bold;font-size:8pt}',
+    'table{width:100%;border-collapse:collapse;table-layout:fixed}',
+    'td,th{border:0.5px solid #666;padding:1px 2px;font-size:7pt;overflow:hidden;white-space:nowrap}',
+    'th{background:#dce6f1;font-weight:bold;text-align:center;font-size:6.5pt}',
     '.num{text-align:right}',
-    '.sr td{font-weight:bold;background:#f2f2f2}',
-    '.sign{margin-top:14px;display:flex;gap:60px}',
-    '.sign span{flex:1;border-bottom:1px solid #000;padding-bottom:2px;font-size:10pt}',
-    '.note{font-size:8pt;color:#555;margin-top:6px}',
-    '.ir{display:flex;justify-content:space-between;align-items:center;margin:4px 0}',
+    '.sr td{font-weight:bold;background:#e8e8e8;font-size:7pt}',
+    '.sign-row{display:flex;margin-top:4px;gap:20px}',
+    '.sign-row span{flex:1;border-bottom:0.5px solid #000;font-size:8pt;padding-bottom:1px}',
+    '.note{font-size:6.5pt;color:#555;margin-top:3px}',
+    '.gap{margin-top:3px}',
+    'col.unit{width:5%}',
+    'col.date{width:7%}',
+    'col.receipt{width:7%}',
+    'col.period{width:10%}',
+    'col.fee{width:7%}',
     '</style>',
     '</head>',
     '<body>',
     '<h2>' + year + '年' + month + '月1日至' + year + '年' + month + '月' + lastDay + '日　泰慶天廈收支明細</h2>',
-    '<div class="ir"><span class="st">(1) 收　入</span><span><strong>A、上個月餘額：' + prev.toLocaleString() + '</strong></span></div>',
+    '<div class="header-row">',
+    '<span class="section-title">(1) 收　入</span>',
+    '<span class="prev-balance">A、上個月餘額：' + prev.toLocaleString() + ' 元</span>',
+    '</div>',
     '<table>',
-    '<tr><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th></tr>',
+    '<colgroup>',
+    '<col class="unit"><col class="date"><col class="receipt"><col class="period"><col class="fee">',
+    '<col class="unit"><col class="date"><col class="receipt"><col class="period"><col class="fee">',
+    '<col class="unit"><col class="date"><col class="receipt"><col class="period"><col class="fee">',
+    '</colgroup>',
+    '<tr><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細</th><th>金額</th><th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細</th><th>金額</th></tr>',
     unitRows,
-    '<tr class="sr"><td colspan="10"></td><td colspan="3"><strong>B、管理費收入：</strong></td><td colspan="2" class="num"><strong>' + mgmt.toLocaleString() + '</strong></td></tr>',
-    '<tr><td colspan="5" rowspan="2" style="font-size:8pt;vertical-align:top"><div><strong>收入原因：</strong></div><div>' + (otherDetail||'無') + '</div></td><td colspan="3"><strong>其他收入：</strong></td><td colspan="2" class="num">' + otherInc.toLocaleString() + '</td><td colspan="5"></td></tr>',
-    '<tr><td colspan="3"><strong>D、收入合計(B+C)：</strong></td><td colspan="2" class="num"><strong>' + totalInc.toLocaleString() + '</strong></td><td colspan="5"></td></tr>',
+    '<tr class="sr"><td colspan="10" style="border:none;background:white"></td><td colspan="3">B、管理費收入：</td><td colspan="2" class="num">' + mgmt.toLocaleString() + '</td></tr>',
+    '<tr><td colspan="5" style="font-size:6.5pt;vertical-align:top;border-right:0.5px solid #666"><strong>收入原因：</strong>' + (otherDetail||'無') + '</td><td colspan="3">其他收入(C)：</td><td colspan="2" class="num">' + otherInc.toLocaleString() + '</td><td colspan="5" style="border:none;background:white"></td></tr>',
+    '<tr class="sr"><td colspan="10" style="border:none;background:white"></td><td colspan="3">D、收入合計(B+C)：</td><td colspan="2" class="num">' + totalInc.toLocaleString() + '</td></tr>',
     '</table>',
-    '<div class="st" style="margin-top:8px">(2) 支　出</div>',
+    '<div class="header-row gap"><span class="section-title">(2) 支　出</span></div>',
     '<table>',
+    '<colgroup>',
+    '<col style="width:7%"><col style="width:22%"><col style="width:1%"><col style="width:1%"><col style="width:8%">',
+    '<col style="width:7%"><col style="width:22%"><col style="width:1%"><col style="width:1%"><col style="width:8%">',
+    '</colgroup>',
     '<tr><th>日期</th><th colspan="3">支出明細（一）</th><th>金額</th><th>日期</th><th colspan="3">支出明細（二）</th><th>金額</th></tr>',
     expRows,
-    '<tr class="sr"><td><strong>合計：</strong></td><td colspan="3"></td><td class="num"><strong>' + exp1Total + '</strong></td><td><strong>合計：</strong></td><td colspan="3"></td><td class="num"><strong>' + exp2Total + '</strong></td></tr>',
-    '<tr class="sr"><td colspan="3"><strong>E、支出合計：</strong></td><td colspan="2" class="num"><strong>' + exp.toLocaleString() + '</strong></td><td colspan="3"><strong>本期結餘(A+F)：</strong></td><td colspan="2" class="num" style="font-size:11pt;color:#1a56a0"><strong>' + bal.toLocaleString() + '</strong></td></tr>',
-    '<tr><td colspan="3"><strong>F、差異(D-E)：</strong></td><td colspan="2" class="num">' + net.toLocaleString() + '</td><td colspan="5"></td></tr>',
+    '<tr class="sr"><td>合計：</td><td colspan="3"></td><td class="num">' + exp1Total + '</td><td>合計：</td><td colspan="3"></td><td class="num">' + exp2Total + '</td></tr>',
+    '<tr class="sr"><td colspan="3">E、支出合計：</td><td colspan="2" class="num">' + exp.toLocaleString() + '</td><td colspan="3">本期結餘(A+F)：</td><td colspan="2" class="num" style="font-size:9pt;font-weight:bold;color:#1a56a0">' + bal.toLocaleString() + '</td></tr>',
+    '<tr><td colspan="3">F、差異(D-E)：</td><td colspan="2" class="num">' + net.toLocaleString() + '</td><td colspan="5"></td></tr>',
     '</table>',
-    '<p class="note">※ 灰色底為遲交管理費住戶，無12月份優惠。</p>',
-    '<div class="sign"><span>主委：</span><span>財務：</span><span>製表人：</span></div>',
+    '<p class="note">※ 灰色底為未繳費或遲交管理費住戶，無12月份優惠。</p>',
+    '<div class="sign-row">',
+    '<span>主委：</span>',
+    '<span>財務：</span>',
+    '<span>製表人：</span>',
+    '</div>',
+    '<script>window.onload=function(){window.print();}<\/script>',
     '</body>',
     '</html>'
   ];
