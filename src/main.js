@@ -963,8 +963,6 @@ window.saveInitBalance = async function() {
 <table>
   <tr>
     <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
-    <th>住戶</th><th>繳交日期</th><th>收據單號</th><th>收費明細(管理費)</th><th>金額</th>
   </tr>
   ${unitRows}
   <tr class="summary-row">
