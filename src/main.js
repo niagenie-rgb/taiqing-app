@@ -218,11 +218,11 @@ function renderFinancePage(year, month) {
         <input type="text" id="fin-item" placeholder="輸入或點選快捷項目">
         <div class="grid2">
           <div><label>金額（元）</label><input type="number" id="fin-amount" placeholder="1000"></div>
-          <div><label>日期（民國）</label><input type="text" id="fin-date" placeholder="115/2/6"></div>
+          <div><label>年份（民國）</label><input type="number" id="fin-year" value="${year}"></div>
         </div>
         <div class="grid2">
-          <div><label>年份（民國）</label><input type="number" id="fin-year" value="${year}"></div>
           <div><label>月份</label><input type="number" id="fin-month" value="${month}" min="1" max="12"></div>
+          <div><label>日期（幾號）</label><input type="number" id="fin-day" placeholder="6" min="1" max="31"></div>
         </div>
         <label>收據/單號（選填）</label>
         <input type="text" id="fin-receipt">
@@ -270,13 +270,14 @@ async function submitFinance() {
   const type = document.getElementById('fin-type').value;
   const item = document.getElementById('fin-item').value.trim();
   const amount = parseFloat(document.getElementById('fin-amount').value);
-  const date = document.getElementById('fin-date').value.trim();
+  const day = document.getElementById('fin-day').value;
+  const date = `${year}/${month}/${day}`;
   const year = parseInt(document.getElementById('fin-year').value);
   const month = parseInt(document.getElementById('fin-month').value);
   const receipt = document.getElementById('fin-receipt').value.trim();
   if (!item) return showMsg('fin-msg', '請填入項目', false);
   if (!amount || isNaN(amount)) return showMsg('fin-msg', '請填入正確金額', false);
-  if (!date) return showMsg('fin-msg', '請填入日期', false);
+  if (!day) return showMsg('fin-msg', '請填入日期（幾號）', false);
   if (!year || !month) return showMsg('fin-msg', '請填入年份和月份', false);
   const btn = document.getElementById('fin-submit');
   btn.textContent = '登記中...'; btn.disabled = true;
