@@ -271,9 +271,9 @@ async function submitFinance() {
   const item = document.getElementById('fin-item').value.trim();
   const amount = parseFloat(document.getElementById('fin-amount').value);
   const day = document.getElementById('fin-day').value;
-  const date = `${year}/${month}/${day}`;
   const year = parseInt(document.getElementById('fin-year').value);
   const month = parseInt(document.getElementById('fin-month').value);
+  const date = `${year}/${month}/${day}`;
   const receipt = document.getElementById('fin-receipt').value.trim();
   if (!item) return showMsg('fin-msg', '請填入項目', false);
   if (!amount || isNaN(amount)) return showMsg('fin-msg', '請填入正確金額', false);
@@ -286,7 +286,7 @@ async function submitFinance() {
     showMsg('fin-msg', `登記成功！${type}：${item} ${amount.toLocaleString()} 元`, true);
     document.getElementById('fin-item').value = '';
     document.getElementById('fin-amount').value = '';
-    document.getElementById('fin-date').value = '';
+    document.getElementById('fin-day').value = '';
     loadFinanceList(year, month);
   } catch (e) {
     showMsg('fin-msg', '錯誤：' + e.message, false);
