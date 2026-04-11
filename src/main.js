@@ -609,12 +609,13 @@ async function loadQuery(year) {
   });
  
   const paidCount = units.filter(u => coveredMap[u.unit] && coveredMap[u.unit].size > 0).length;
-  const lateCount = units.filter(u => lateMap[u.unit] > 0).length;
+  // 遲交：有遲交記錄 OR 完全沒繳費的住戶
+  const lateCount = units.filter(u => lateMap[u.unit] > 0 || !coveredMap[u.unit] || coveredMap[u.unit].size === 0).length;
   const discCount = units.filter(u => lateMap[u.unit] === 0 && coveredMap[u.unit] && coveredMap[u.unit].size > 0).length;
  
   statsEl.innerHTML = `
     <div class="stat"><div class="stat-label">已繳費住戶</div><div class="stat-val">${paidCount}</div></div>
-    <div class="stat"><div class="stat-label">有遲交記錄</div><div class="stat-val" style="color:#c62828">${lateCount}</div></div>
+    <div class="stat"><div class="stat-label">遲交／未繳</div><div class="stat-val" style="color:#c62828">${lateCount}</div></div>
     <div class="stat"><div class="stat-label">可享12月優惠</div><div class="stat-val" style="color:#2e7d32">${discCount}</div></div>`;
  
   el.innerHTML = `<table><tr><th>住戶</th><th>已繳月份</th><th>已繳到</th><th>遲交次數</th><th>12月優惠</th></tr>
@@ -622,13 +623,15 @@ async function loadQuery(year) {
       const covered = Array.from(coveredMap[u.unit] || new Set()).sort((a,b) => a-b);
       const maxMonth = covered.length ? Math.max(...covered) : 0;
       const late = lateMap[u.unit] || 0;
-      return `<tr class="${late > 0 ? 'row-late' : ''}">
+      const unpaid = covered.length === 0;
+      const rowClass = (late > 0 || unpaid) ? 'row-late' : '';
+      return `<tr class="${rowClass}">
         <td>${u.unit}</td>
         <td style="font-size:12px">${covered.length ? covered.map(m => m + '月').join('、') : '—'}</td>
         <td style="font-weight:500;color:#1a56a0">${maxMonth ? maxMonth + '月' : '—'}</td>
-        <td>${late > 0 ? `<span class="badge badge-late">${late}次</span>` : '0'}</td>
-        <td><span class="badge ${late === 0 && covered.length > 0 ? 'badge-ok' : late > 0 ? 'badge-late' : 'badge-unpaid'}">
-          ${late === 0 && covered.length > 0 ? '享有優惠' : late > 0 ? '無優惠' : '未繳費'}</span></td>
+        <td>${unpaid ? '<span class="badge badge-unpaid">未繳費</span>' : late > 0 ? `<span class="badge badge-late">${late}次</span>` : '0'}</td>
+        <td><span class="badge ${!unpaid && late === 0 ? 'badge-ok' : 'badge-late'}">
+          ${!unpaid && late === 0 ? '享有優惠' : unpaid ? '無優惠(未繳)' : '無優惠'}</span></td>
       </tr>`;
     }).join('')}</table>`;
 }
