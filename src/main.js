@@ -792,7 +792,7 @@ async function loadSummaryTable(year) {
     if (mgmt || other || exp) {
       balance += mgmt + other - exp;
       hasData = true;
-      html += `<tr><td>${year}年${m}月</td><td>${mgmt.toLocaleString()}</td><td>${other.toLocaleString()}</td><td>${exp.toLocaleString()}</td><td style="font-weight:500;color:#1a56a0">${Math.round(balance).toLocaleString()}</td></tr>`;
+      html += '<tr><td>' + year + '年' + m + '月</td><td>' + mgmt.toLocaleString() + '</td><td>' + other.toLocaleString() + '</td><td>' + exp.toLocaleString() + '</td><td style="font-weight:500;color:#1a56a0">' + Math.round(balance).toLocaleString() + '</td></tr>';
     }
   }
   html += '</table>';
