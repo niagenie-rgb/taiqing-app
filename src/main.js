@@ -308,6 +308,7 @@ function updateFeeDisplay() {
   el.textContent = `應繳 ${(u.fee * months.length).toLocaleString()} 元（${u.fee} × ${months.length} 個月）`;
 }
 
+// ========== 登記繳費（新版）==========
 async function submitPayment() {
   const unit = document.getElementById('pay-unit').value;
   const months = Array.from(document.getElementById('pay-months').selectedOptions).map(o => o.value);
@@ -318,43 +319,10 @@ async function submitPayment() {
   if (!months.length) return showMsg('pay-msg', '請選擇月份', false);
   if (!payDate) return showMsg('pay-msg', '請填入繳費日期', false);
   if (!receipt) return showMsg('pay-msg', '請填入收據編號', false);
+ 
   const u = units.find(x => x.unit === unit);
   const fee = u ? u.fee : 1500;
-  const btn = document.getElementById('pay-submit');
-  btn.textContent = '登記中...'; btn.disabled = true;
-  try {
-    const groupId = `g${Date.now()}`;
-const groupMonths = months.map(m => parseInt(m.split('-')[1]));
-const groupStartMonth = Math.min(...groupMonths);
-const groupEndMonth = Math.max(...groupMonths);
-const totalFee = fee * months.length;
-for (const m of months) {
-  const [y, mo] = m.split('-');
-  const late = isLate(payDate, y, mo);
-  const isFirst = parseInt(mo) === groupStartMonth;
-  await addDoc(collection(db, 'payments'), {
-    unit, year: parseInt(y), month: parseInt(mo), payDate, receipt,
-    fee: isFirst ? totalFee : 0,
-    actualFee: totalFee,
-    late, note, groupId,
-    groupStartMonth, groupEndMonth,
-    ts: new Date().toISOString()
-  });
-}
-    showMsg('pay-msg', `登記成功！${unit} 共 ${(fee * months.length).toLocaleString()} 元`, true);
-    document.getElementById('pay-unit').value = '';
-    document.getElementById('pay-months').selectedIndex = -1;
-    document.getElementById('pay-date').value = '';
-    document.getElementById('pay-receipt').value = '';
-    document.getElementById('pay-note').value = '';
-    document.getElementById('fee-display').textContent = '請先選擇住戶和月份';
-    const { year, month } = rocNow();
-    loadPaySummary(year, month);
-  } catch (e) {
-    showMsg('pay-msg', '錯誤：' + e.message, false);
-  }
-  btn.textContent = '確認登記'; btn.disabled = false;
-}
+  const totalFee = fee * months.length;
 
 async function loadPaySummary(year, month) {
   const el = document.getElementById('pay-list');
