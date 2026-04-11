@@ -242,7 +242,7 @@ function renderFinancePage(year, month) {
 }
 
 const incomePresets = ['倉庫租金', '磁扣購買', '感應卡', '停車費', '罰款', '其他'];
-const expensePresets = ['物業費用', '水電費', '電話費', '垃圾袋', '清潔用品', '發電機保養', '電梯維修', '消防保養', '委員出席費', '存證信函郵資', '油漆修繕', '其他'];
+const expensePresets = ['物業費用', '水電費', '電話費', '例行保養', '修繕費', '行政雜支', '委員出席費', '其他'];
 
 function bindFinanceEvents() {
   const typeEl = document.getElementById('fin-type');
