@@ -28,13 +28,15 @@ function rocNow() {
   return { year: now.getFullYear() - 1911, month: now.getMonth() + 1 };
 }
 
+// 遲交判斷：繳費的「年/月」晚於應繳月份才算遲交
+// 例：5月才繳4月的費 → 遲交；4月任何一天繳4月的費 → 不遲交
 function isLate(payDateStr, feeYear, feeMonth) {
   try {
     const p = payDateStr.split('/');
-    if (p.length < 3) return false;
-    const pd = parseInt(p[0]) * 10000 + parseInt(p[1]) * 100 + parseInt(p[2]);
-    const due = parseInt(feeYear) * 10000 + parseInt(feeMonth) * 100 + 10;
-    return pd > due;
+    if (p.length < 2) return false;
+    const payY = parseInt(p[0]);
+    const payM = parseInt(p[1]);
+    return payY > feeYear || (payY === feeYear && payM > feeMonth);
   } catch { return false; }
 }
 
@@ -376,19 +378,23 @@ async function submitPayment() {
   const fee = u ? u.fee : 1500;
   const totalFee = fee * months.length;
  
-  // 解析繳費月份
+  // 解析繳費月份（格式：'115-04'）
   const monthNums = months.map(m => parseInt(m.split('-')[1]));
   const startMonth = Math.min(...monthNums);
   const endMonth = Math.max(...monthNums);
+
+  // 取得起始應繳月份對應的年份
+  const startEntry = months.find(m => parseInt(m.split('-')[1]) === startMonth);
+  const startFeeYear = parseInt(startEntry.split('-')[0]);
  
-  // 解析繳費日期的月份（用來計算收入）
+  // 解析繳費日期的年份與月份（用來計算收入）
   const dateParts = payDate.split('/');
+  const payYear = dateParts.length >= 1 ? parseInt(dateParts[0]) : startFeeYear;
   const payMonth = dateParts.length >= 2 ? parseInt(dateParts[1]) : startMonth;
-  const payYear = dateParts.length >= 1 ? parseInt(dateParts[0]) : 115;
  
-  // 判斷是否遲交（繳費日超過應繳月10日）
-  const payDay = dateParts.length >= 3 ? parseInt(dateParts[2]) : 1;
-  const late = payMonth > startMonth || (payMonth === startMonth && payDay > 10);
+  // 遲交判斷：繳費的「年/月」晚於應繳的起始月份才算遲交
+  // 例：4月繳4月 → 不遲交；5月才繳4月 → 遲交
+  const late = payYear > startFeeYear || (payYear === startFeeYear && payMonth > startMonth);
  
   const btn = document.getElementById('pay-submit');
   btn.textContent = '登記中...'; btn.disabled = true;
