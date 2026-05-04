@@ -11,7 +11,6 @@ let currentTab = 'pay';
 async function loadUnits() {
   const snap = await getDocs(collection(db, 'units'));
   if (snap.empty) {
-    // 初次使用，寫入預設住戶
     for (const u of DEFAULT_UNITS) {
       await setDoc(doc(db, 'units', u.unit), u);
     }
@@ -28,8 +27,6 @@ function rocNow() {
   return { year: now.getFullYear() - 1911, month: now.getMonth() + 1 };
 }
 
-// 遲交判斷：繳費的「年/月」晚於應繳月份才算遲交
-// 例：5月才繳4月的費 → 遲交；4月任何一天繳4月的費 → 不遲交
 function isLate(payDateStr, feeYear, feeMonth) {
   try {
     const p = payDateStr.split('/');
@@ -82,6 +79,7 @@ function renderApp() {
   loadSummaryTable(year);
   loadSettingsTable();
 }
+
 // ========== 資料管理 ==========
 function renderManagePage() {
   return `
@@ -163,11 +161,16 @@ window.searchPayments = async function() {
   </table>`;
 }
 
+// ★ 修正：savePayment 同時更新 payYear / payMonth，避免與 year/month 不同步
 window.savePayment = async function(id) {
+  const year = parseInt(document.getElementById(`py-${id}`).value);
+  const month = parseInt(document.getElementById(`pm-${id}`).value);
   const data = {
     unit: document.getElementById(`pu-${id}`).value.trim(),
-    year: parseInt(document.getElementById(`py-${id}`).value),
-    month: parseInt(document.getElementById(`pm-${id}`).value),
+    year: year,
+    month: month,
+    payYear: year,    // ← 修正：一併更新 payYear
+    payMonth: month,  // ← 修正：一併更新 payMonth
     payDate: document.getElementById(`pd-${id}`).value.trim(),
     receipt: document.getElementById(`pr-${id}`).value.trim(),
     fee: parseFloat(document.getElementById(`pf-${id}`).value) || 0,
@@ -246,13 +249,15 @@ window.delFinanceManage = async function(id) {
   await deleteDoc(doc(db, 'finances', id));
   document.getElementById(`fin-row-${id}`).remove();
 }
+
 window.switchTab = function(t) {
   currentTab = t;
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab')[['pay','finance','query','report','settings','manage'].indexOf(t)].classList.add('active');
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + t).classList.add('active');
-  if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); setTimeout(autoFillPrevBalance, 300); }
+  // ★ 修正：ES module 內需用 window.autoFillPrevBalance 才能正確參照
+  if (t === 'report') { loadSummaryTable(new Date().getFullYear()-1911); setTimeout(window.autoFillPrevBalance, 300); }
 }
 
 window.autoFillPrevBalance = async function() {
@@ -267,6 +272,7 @@ window.autoFillPrevBalance = async function() {
     document.getElementById('rpt-prev').value = prevBalance;
   }
 }
+
 async function calcBalanceUpTo(year, month) {
   try {
     const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
@@ -275,7 +281,6 @@ async function calcBalanceUpTo(year, month) {
     const startYear = initSnap.data().year;
     const startMonth = initSnap.data().month;
 
-    // 若 month=0 表示上月為上一年12月
     let targetYear = year;
     let targetMonth = month;
     if (targetMonth <= 0) {
@@ -283,7 +288,6 @@ async function calcBalanceUpTo(year, month) {
       targetMonth = 12;
     }
 
-    // 一次抓所有相關年份的 payments（避免跨年漏查）
     const payFetches = [];
     for (let y = startYear; y <= targetYear; y++) {
       payFetches.push(getDocs(query(collection(db, 'payments'), where('payYear', '==', y))));
@@ -306,6 +310,7 @@ async function calcBalanceUpTo(year, month) {
     return Math.round(balance);
   } catch(e) { return null; }
 }
+
 // ========== 登記繳費 ==========
 function renderPayPage(year, month) {
   const unitOpts = units.map(u =>
@@ -362,7 +367,6 @@ function updateFeeDisplay() {
   el.textContent = `應繳 ${(u.fee * months.length).toLocaleString()} 元（${u.fee} × ${months.length} 個月）`;
 }
 
-// ========== 登記繳費（新版）==========
 async function submitPayment() {
   const unit = document.getElementById('pay-unit').value;
   const months = Array.from(document.getElementById('pay-months').selectedOptions).map(o => o.value);
@@ -373,43 +377,38 @@ async function submitPayment() {
   if (!months.length) return showMsg('pay-msg', '請選擇月份', false);
   if (!payDate) return showMsg('pay-msg', '請填入繳費日期', false);
   if (!receipt) return showMsg('pay-msg', '請填入收據編號', false);
- 
+
   const u = units.find(x => x.unit === unit);
   const fee = u ? u.fee : 1500;
   const totalFee = fee * months.length;
- 
-  // 解析繳費月份（格式：'115-04'）
+
   const monthNums = months.map(m => parseInt(m.split('-')[1]));
   const startMonth = Math.min(...monthNums);
   const endMonth = Math.max(...monthNums);
 
-  // 取得起始應繳月份對應的年份
   const startEntry = months.find(m => parseInt(m.split('-')[1]) === startMonth);
   const startFeeYear = parseInt(startEntry.split('-')[0]);
- 
-  // 解析繳費日期的年份與月份（用來計算收入）
+
   const dateParts = payDate.split('/');
   const payYear = dateParts.length >= 1 ? parseInt(dateParts[0]) : startFeeYear;
   const payMonth = dateParts.length >= 2 ? parseInt(dateParts[1]) : startMonth;
- 
-  // 遲交判斷：繳費的「年/月」晚於應繳的起始月份才算遲交
-  // 例：4月繳4月 → 不遲交；5月才繳4月 → 遲交
+
   const late = payYear > startFeeYear || (payYear === startFeeYear && payMonth > startMonth);
- 
+
   const btn = document.getElementById('pay-submit');
   btn.textContent = '登記中...'; btn.disabled = true;
   try {
     await addDoc(collection(db, 'payments'), {
       unit,
       payYear,
-      payMonth,       // 繳費時間的月份（計算收入用）
-      startMonth,     // 已繳起始月
-      endMonth,       // 已繳到幾月
-      year: payYear,  // 保留相容性
+      payMonth,
+      startMonth,
+      endMonth,
+      year: payYear,
       month: payMonth,
       payDate,
       receipt,
-      fee: totalFee,  // 實際收取金額
+      fee: totalFee,
       late,
       note,
       ts: new Date().toISOString()
@@ -429,12 +428,10 @@ async function submitPayment() {
   btn.textContent = '確認登記'; btn.disabled = false;
 }
 
-// ========== 本月繳費摘要（新版）==========
 async function loadPaySummary(year, month) {
   const el = document.getElementById('pay-list');
   const statsEl = document.getElementById('pay-stats');
   if (!el) return;
-  // 用 payMonth 來篩選本月收入
   const q = query(collection(db, 'payments'), where('payYear', '==', year), where('payMonth', '==', month));
   const snap = await getDocs(q);
   const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -567,11 +564,13 @@ window.deleteFinance = async function(id, year, month) {
   await deleteDoc(doc(db, 'finances', id));
   loadFinanceList(year, month);
 }
+
 window.deletePayment = async function(id, year, month) {
   if (!confirm('確定刪除此筆繳費記錄？')) return;
   await deleteDoc(doc(db, 'payments', id));
   loadPaySummary(year, month);
 }
+
 // ========== 查詢 ==========
 function renderQueryPage(year) {
   return `
@@ -593,19 +592,17 @@ window.reloadQuery = function() {
   loadQuery(y);
 }
 
-// ========== 查詢狀況（新版）==========
 async function loadQuery(year) {
   const el = document.getElementById('q-table');
   const statsEl = document.getElementById('q-stats');
   if (!el) return;
   const snap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
   const allPay = snap.docs.map(d => d.data());
- 
-  // 建立各戶已繳狀況（用 startMonth~endMonth 判斷）
-  const coveredMap = {}; // unit -> Set of covered months
+
+  const coveredMap = {};
   const lateMap = {};
   units.forEach(u => { coveredMap[u.unit] = new Set(); lateMap[u.unit] = 0; });
- 
+
   allPay.forEach(p => {
     if (!coveredMap[p.unit]) coveredMap[p.unit] = new Set();
     const start = p.startMonth || p.payMonth || p.month;
@@ -613,17 +610,16 @@ async function loadQuery(year) {
     for (let m = start; m <= end; m++) coveredMap[p.unit].add(m);
     if (p.late) lateMap[p.unit] = (lateMap[p.unit] || 0) + 1;
   });
- 
+
   const paidCount = units.filter(u => coveredMap[u.unit] && coveredMap[u.unit].size > 0).length;
-  // 遲交：有遲交記錄 OR 完全沒繳費的住戶
   const lateCount = units.filter(u => lateMap[u.unit] > 0 || !coveredMap[u.unit] || coveredMap[u.unit].size === 0).length;
   const discCount = units.filter(u => lateMap[u.unit] === 0 && coveredMap[u.unit] && coveredMap[u.unit].size > 0).length;
- 
+
   statsEl.innerHTML = `
     <div class="stat"><div class="stat-label">已繳費住戶</div><div class="stat-val">${paidCount}</div></div>
     <div class="stat"><div class="stat-label">遲交／未繳</div><div class="stat-val" style="color:#c62828">${lateCount}</div></div>
     <div class="stat"><div class="stat-label">可享12月優惠</div><div class="stat-val" style="color:#2e7d32">${discCount}</div></div>`;
- 
+
   el.innerHTML = `<table><tr><th>住戶</th><th>已繳月份</th><th>已繳到</th><th>遲交次數</th><th>12月優惠</th></tr>
     ${units.map(u => {
       const covered = Array.from(coveredMap[u.unit] || new Set()).sort((a,b) => a-b);
@@ -676,8 +672,7 @@ document.addEventListener('click', e => {
   if (e.target.id === 'rpt-submit') generateReport();
 });
 
-// ========== 月結算（新版）==========
- 
+// ★ 核心修正：buildReportHTML 不變，主要修正 generateReport 裡的 displayMap 邏輯
 function buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fins, mgmt, otherInc, exp, totalInc, net, bal) {
   const lastDay = new Date(year + 1911, month, 0).getDate();
   const perCol = Math.ceil(units.length / 3);
@@ -813,24 +808,59 @@ async function generateReport() {
     const totalInc = mgmt + otherInc;
     const net = totalInc - exp;
     const bal = prev + net;
+
+    // ★ 核心修正：同一住戶同月多筆繳費時，累加金額而非覆蓋
     const displayMap = {};
     allPays.forEach(p => {
       const start = p.startMonth || p.payMonth || p.month;
       const end = p.endMonth || p.payMonth || p.month;
+      // 此付款記錄的範圍有涵蓋到報表月份，才顯示
       if (start <= month && end >= month) {
         const isPayMonth = p.payMonth === month;
-        if (!displayMap[p.unit] || isPayMonth) {
-          const periodStr = start === end ? year + '年' + start + '月' : year + '年' + start + '-' + end + '月';
+        const periodStr = start === end
+          ? year + '年' + start + '月'
+          : year + '年' + start + '-' + end + '月';
+
+        if (!displayMap[p.unit]) {
+          // 尚無此住戶記錄，直接建立
           displayMap[p.unit] = {
             payDate: p.payDate,
             receipt: p.receipt,
             period: isPayMonth ? periodStr : '已繳至' + end + '月',
-            fee: isPayMonth ? p.fee : '-',
+            fee: isPayMonth ? (p.fee || 0) : '-',
             late: p.late,
+            _isPayMonth: isPayMonth,
           };
+        } else if (isPayMonth) {
+          if (displayMap[p.unit]._isPayMonth) {
+            // ★ 兩筆都是本月付款 → 累加金額、合併收據號碼
+            const prevFee = typeof displayMap[p.unit].fee === 'number' ? displayMap[p.unit].fee : 0;
+            displayMap[p.unit].fee = prevFee + (p.fee || 0);
+            // 收據號碼不同才合併顯示
+            if (p.receipt && displayMap[p.unit].receipt !== p.receipt) {
+              displayMap[p.unit].receipt = displayMap[p.unit].receipt + '/' + p.receipt;
+            }
+            // 任一筆遲交即標為遲交（灰底）
+            if (p.late) displayMap[p.unit].late = true;
+            // 日期取最後一筆（可依需求調整）
+            displayMap[p.unit].payDate = p.payDate;
+            displayMap[p.unit].period = periodStr;
+          } else {
+            // 原本是跨月舊記錄，現在有本月付款記錄，改用本月記錄覆蓋
+            displayMap[p.unit] = {
+              payDate: p.payDate,
+              receipt: p.receipt,
+              period: periodStr,
+              fee: p.fee || 0,
+              late: p.late,
+              _isPayMonth: true,
+            };
+          }
         }
+        // isPayMonth=false 且已有記錄 → 不動作（保留已有的本月付款記錄）
       }
     });
+
     const html = buildReportHTML(year, month, prev, units, displayMap, thisMonthPays, fins, mgmt, otherInc, exp, totalInc, net, bal);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -843,13 +873,12 @@ async function generateReport() {
   btn.textContent = '產生報表 (PDF列印)'; btn.disabled = false;
 }
 
-// ========== 月結算（新版）==========
+// ========== 月結算 ==========
 async function loadSummaryTable(year) {
   const el = document.getElementById('summary-table');
   if (!el) return;
   const initSnap = await getDoc(doc(db, 'settings', 'initBalance'));
   let balance = initSnap.exists() ? initSnap.data().value : 0;
-// 期初結餘是1月開始前的結餘，直接從這個值開始累加
   const paySnap = await getDocs(query(collection(db, 'payments'), where('payYear', '==', year)));
   const finSnap = await getDocs(query(collection(db, 'finances'), where('year', '==', year)));
   const pays = paySnap.docs.map(d => d.data());
@@ -869,6 +898,7 @@ async function loadSummaryTable(year) {
   html += '</table>';
   el.innerHTML = hasData ? html : '<div class="empty">尚無資料</div>';
 }
+
 // ========== 住戶設定 ==========
 function renderSettingsPage() {
   return `
@@ -902,12 +932,14 @@ window.saveUnit = async function(i) {
   document.getElementById(`fee-${i}`).value = fee;
   alert(`${units[i].unit} 設定已儲存！金額：${fee} 元${vacant ? '（空屋減半）' : ''}`);
 }
+
 window.saveInitBalance = async function() {
   const val = parseFloat(document.getElementById('init-balance').value);
   if (!val) return;
   await setDoc(doc(db, 'settings', 'initBalance'), { value: val, year: 115, month: 1 });
   showMsg('init-msg', '期初結餘 ' + val.toLocaleString() + ' 元已儲存！', true);
 }
+
 // ========== 啟動 ==========
 async function init() {
   document.getElementById('app').innerHTML = '<div style="text-align:center;padding:60px;color:#666">系統載入中...</div>';
